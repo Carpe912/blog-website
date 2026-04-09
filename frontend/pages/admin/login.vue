@@ -41,11 +41,11 @@ async function handleLogin() {
   error.value = ''
   try {
     const config = useRuntimeConfig()
-    const res = await $fetch<{ token: string }>(`${config.public.apiBase}/auth/login`, {
+    const res = await $fetch<{ data: { token: string } }>(`${config.public.apiBase}/auth/login`, {
       method: 'POST',
       body: { password: password.value },
     })
-    useCookie('admin_token', { maxAge: 60 * 60 * 24 }).value = res.token
+    useCookie('admin_token', { maxAge: 60 * 60 * 24 }).value = res.data.token
     router.push('/admin')
   } catch {
     error.value = '密码错误，请重试'

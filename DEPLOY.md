@@ -170,7 +170,7 @@ cd blog-website
 
 ```bash
 cd /www/wwwroot/blog-website/backend
-npm install
+npm install --no-workspaces
 
 # 安装 cookie-parser（若 package.json 中没有）
 npm install cookie-parser @types/cookie-parser

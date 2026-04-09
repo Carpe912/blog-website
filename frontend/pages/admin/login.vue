@@ -40,7 +40,8 @@ async function handleLogin() {
   loading.value = true
   error.value = ''
   try {
-    const res = await $fetch<{ token: string }>('http://localhost:3001/api/auth/login', {
+    const config = useRuntimeConfig()
+    const res = await $fetch<{ token: string }>(`${config.public.apiBase}/auth/login`, {
       method: 'POST',
       body: { password: password.value },
     })

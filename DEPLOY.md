@@ -73,13 +73,13 @@ curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
 # 使环境变量生效
 source ~/.bashrc   # 或 source ~/.zshrc
 
-# 安装 Node.js 18 LTS
-nvm install 18
-nvm use 18
-nvm alias default 18
+# 安装 Node.js 20 LTS
+nvm install 22
+nvm use 22
+nvm alias default 22
 
 # 验证
-node -v   # 应输出 v18.x.x
+node -v   # 应输出 v22.x.x
 npm -v
 ```
 

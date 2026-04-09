@@ -70,6 +70,7 @@ export default defineNuxtConfig({
       siteDescription: process.env.SITE_DESCRIPTION || '记录思考，分享知识',
       siteUrl: process.env.SITE_URL || 'http://localhost:3000',
       author: process.env.AUTHOR || 'Blog Author',
+      apiBase: process.env.API_BASE || 'http://localhost:3001/api',
     },
   },
 

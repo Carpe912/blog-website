@@ -34,7 +34,14 @@ yum install -y wget && wget -O install.sh https://download.bt.cn/install/install
 wget -O install.sh https://download.bt.cn/install/install-ubuntu_6.0.sh && sudo bash install.sh ed8484bec
 ```
 
+【云服务器】请在安全组放行 8888 端口
+外网ipv4面板地址: https://47.116.6.132:8888/ab3fbd34
+内网面板地址: https://172.24.11.217:8888/ab3fbd34
+username: cda222c6
+password: 83e1cc34
+
 安装完成后按提示记录：
+
 - 面板地址（如 `http://your-ip:8888/xxxxxxxx`）
 - 面板用户名和密码
 
@@ -46,10 +53,10 @@ wget -O install.sh https://download.bt.cn/install/install-ubuntu_6.0.sh && sudo 
 
 登录宝塔面板 → **软件商店**，安装以下软件：
 
-| 软件 | 推荐版本 | 说明 |
-|------|----------|------|
-| Nginx | 1.24.x | Web 服务器 / 反向代理 |
-| PM2 管理器 | 最新版 | Node.js 进程守护 |
+| 软件       | 推荐版本 | 说明                  |
+| ---------- | -------- | --------------------- |
+| Nginx      | 1.24.x   | Web 服务器 / 反向代理 |
+| PM2 管理器 | 最新版   | Node.js 进程守护      |
 
 > **不要通过宝塔安装 Node.js**，下一步用 nvm 安装以便管理版本。
 
@@ -101,7 +108,7 @@ sudo -i -u postgres
 # 进入 psql
 psql
 
-# 执行以下 SQL（替换 your_password 为强密码）
+# 执行以下 SQL（替换 your_password 为强密码）  666666 就是密码
 ALTER USER postgres WITH PASSWORD 'your_password';
 CREATE DATABASE blog_db;
 \q
@@ -381,15 +388,15 @@ pm2 restart blog-backend blog-frontend
 
 宝塔面板 → **安全** → **系统防火墙**，确认端口规则：
 
-| 端口 | 状态 | 说明 |
-|------|------|------|
-| 22 | 开放 | SSH |
-| 80 | 开放 | HTTP |
-| 443 | 开放 | HTTPS |
-| 8888 | 开放（可限制 IP） | 宝塔面板 |
-| 3000 | **关闭** | 前端（只允许本机访问） |
-| 3001 | **关闭** | 后端（只允许本机访问） |
-| 5432 | **关闭** | PostgreSQL（只允许本机访问） |
+| 端口 | 状态              | 说明                         |
+| ---- | ----------------- | ---------------------------- |
+| 22   | 开放              | SSH                          |
+| 80   | 开放              | HTTP                         |
+| 443  | 开放              | HTTPS                        |
+| 8888 | 开放（可限制 IP） | 宝塔面板                     |
+| 3000 | **关闭**          | 前端（只允许本机访问）       |
+| 3001 | **关闭**          | 后端（只允许本机访问）       |
+| 5432 | **关闭**          | PostgreSQL（只允许本机访问） |
 
 > 3000 / 3001 / 5432 端口**不要对外开放**，通过 Nginx 代理访问即可。
 
@@ -521,3 +528,178 @@ pm2 save
         └── server/
             └── index.mjs ← pm2 入口
 ```
+
+---
+
+## 十一、代码更新后自动部署
+
+当你推送代码到 GitHub 后，有两种方式让服务器自动拉取并重新部署。
+
+---
+
+### 方式一：GitHub Actions 自动部署（推荐）
+
+推送到 `main` 分支后，GitHub Actions 自动 SSH 连接服务器执行部署脚本。
+
+#### 第 1 步：在服务器上生成 SSH 密钥对
+
+```bash
+# 在服务器上执行
+ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/github_actions -N ""
+
+# 将公钥加入授权列表（允许该密钥 SSH 登录）
+cat ~/.ssh/github_actions.pub >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+
+# 查看私钥（下一步要复制到 GitHub）
+cat ~/.ssh/github_actions
+```
+
+#### 第 2 步：在 GitHub 仓库配置 Secrets
+
+进入 GitHub 仓库 → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**，依次添加：
+
+| Secret 名称       | 值                                                        |
+| ----------------- | --------------------------------------------------------- |
+| `SSH_HOST`        | 服务器公网 IP                                             |
+| `SSH_PORT`        | SSH 端口（默认 `22`）                                     |
+| `SSH_USER`        | SSH 登录用户名（如 `root`）                               |
+| `SSH_PRIVATE_KEY` | 上一步 `cat ~/.ssh/github_actions` 输出的**完整私钥**内容 |
+
+#### 第 3 步：创建 GitHub Actions workflow 文件
+
+项目根目录已提供 `.github/workflows/deploy.yml`，内容见下方。
+
+每次向 `main` 分支推送代码，workflow 会自动：
+
+1. SSH 连接服务器
+2. `git pull` 拉取最新代码
+3. 重新安装依赖、执行数据库迁移、构建
+4. PM2 重启前后端进程
+
+#### workflow 触发条件
+
+只要 `main` 分支上**产生新提交**，就会触发，包括：
+
+- `git push origin main`（本地直接推送）
+- GitHub 上 **Pull Request merge 到 main**
+- GitHub 网页上直接编辑文件提交到 main
+
+> merge PR 的本质也是向 main 推送新提交，所以同样触发。
+> 只是提交了 PR 但还未 merge，不会触发。
+
+可在 GitHub 仓库 → **Actions** 页面查看每次部署的实时日志。
+
+---
+
+### 方式二：宝塔 Webhook 自动部署
+
+无需配置 GitHub Secrets，由服务器主动监听 GitHub 的推送通知。
+
+#### 第 1 步：在服务器创建部署脚本
+
+```bash
+mkdir -p /www/scripts
+nano /www/scripts/deploy.sh
+```
+
+粘贴以下内容：
+
+```bash
+#!/bin/bash
+set -e
+
+PROJECT_DIR="/www/wwwroot/blog-website"
+LOG_FILE="/www/wwwlogs/deploy.log"
+
+echo "==============================" >> $LOG_FILE
+echo "Deploy started: $(date)" >> $LOG_FILE
+
+cd $PROJECT_DIR
+
+# 拉取最新代码
+git pull origin main >> $LOG_FILE 2>&1
+
+# 加载 nvm（非交互式 shell 需手动 source）
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# 更新后端
+echo "--- Building backend ---" >> $LOG_FILE
+cd $PROJECT_DIR/backend
+npm install --production=false >> $LOG_FILE 2>&1
+npx prisma generate >> $LOG_FILE 2>&1
+npx prisma migrate deploy >> $LOG_FILE 2>&1
+npm run build >> $LOG_FILE 2>&1
+pm2 restart blog-backend >> $LOG_FILE 2>&1
+
+# 更新前端
+echo "--- Building frontend ---" >> $LOG_FILE
+cd $PROJECT_DIR/frontend
+npm install >> $LOG_FILE 2>&1
+npm run build >> $LOG_FILE 2>&1
+pm2 restart blog-frontend >> $LOG_FILE 2>&1
+
+echo "Deploy finished: $(date)" >> $LOG_FILE
+echo "==============================" >> $LOG_FILE
+```
+
+赋予执行权限：
+
+```bash
+chmod +x /www/scripts/deploy.sh
+```
+
+#### 第 2 步：在宝塔面板配置 Webhook
+
+1. 宝塔面板 → **软件商店** → 搜索 **宝塔WebHook** → 安装
+2. 打开宝塔 WebHook → **添加**：
+   - 名称：`blog-deploy`
+   - 脚本：`/www/scripts/deploy.sh`
+3. 保存后复制生成的 **Webhook URL**，格式如：
+   ```
+   http://your-server-ip:8888/hook?access_key=xxxxxxxx&param=blog-deploy
+   ```
+
+#### 第 3 步：在 GitHub 配置 Webhook
+
+1. GitHub 仓库 → **Settings** → **Webhooks** → **Add webhook**
+2. 填写：
+   - **Payload URL**：粘贴上一步复制的宝塔 Webhook URL
+   - **Content type**：`application/json`
+   - **Which events**：选 **Just the push event**
+3. 点击 **Add webhook**
+
+#### 触发方式
+
+同 GitHub Actions，只要 `main` 分支产生新提交（直接 push 或 PR merge）都会触发。
+
+```
+git push origin main   # 推送后 GitHub 自动通知服务器执行部署脚本
+```
+
+查看部署日志：
+
+```bash
+tail -f /www/wwwlogs/deploy.log
+```
+
+---
+
+### 两种方式对比
+
+| 对比项             | GitHub Actions                     | 宝塔 Webhook                          |
+| ------------------ | ---------------------------------- | ------------------------------------- |
+| 配置复杂度         | 中（需配置 Secrets）               | 低（宝塔界面操作）                    |
+| 构建位置           | GitHub 服务器 SSH 到你的服务器执行 | 服务器本地执行                        |
+| 日志查看           | GitHub Actions 页面，清晰          | 服务器 `/www/wwwlogs/deploy.log`      |
+| 需要服务器开放端口 | 只需 22（SSH）                     | 需要 8888（宝塔端口）可被 GitHub 访问 |
+| 推荐场景           | 有 GitHub 付费套餐或公开仓库       | 简单快速，私有仓库也适用              |
+
+> **推荐**：优先用 **GitHub Actions**，日志更清晰，出错更容易排查。若服务器无法被 GitHub 访问 8888 端口，改用 GitHub Actions 的 SSH 方案。
+
+【云服务器】请在安全组放行 8888 端口
+外网ipv4面板地址: https://47.116.6.132:8888/ab3fbd34
+内网面板地址: https://172.24.11.217:8888/ab3fbd34
+username: cda222c6
+password: 83e1cc34

@@ -1,0 +1,56 @@
+name: Deploy to Server
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    name: SSH Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          port: ${{ secrets.SSH_PORT }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script_stop: true   # 任意步骤失败即终止
+          script: |
+            set -e
+
+            PROJECT_DIR="/www/wwwroot/blog-website"
+
+            echo "===== [1/6] 拉取最新代码 ====="
+            cd $PROJECT_DIR
+            git pull origin main
+
+            # 加载 nvm（非交互式 shell 需手动 source）
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+            echo "===== [2/6] 安装后端依赖 ====="
+            cd $PROJECT_DIR/backend
+            npm install --production=false
+
+            echo "===== [3/6] Prisma 生成 & 迁移 ====="
+            npx prisma generate
+            npx prisma migrate deploy
+
+            echo "===== [4/6] 构建后端 ====="
+            npm run build
+
+            echo "===== [5/6] 安装前端依赖 & 构建 ====="
+            cd $PROJECT_DIR/frontend
+            npm install
+            npm run build
+
+            echo "===== [6/6] PM2 重启服务 ====="
+            pm2 restart blog-backend
+            pm2 restart blog-frontend
+            pm2 save
+
+            echo "===== 部署完成 $(date) ====="

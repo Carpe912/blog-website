@@ -42,8 +42,8 @@ const [postsRes, allRes, tagsRes] = await Promise.all([
   tagsApi.list(),
 ])
 
-stats.posts = postsRes.meta?.total ?? 0
-stats.published = allRes.meta?.total ?? 0
+stats.posts = (postsRes as any).meta?.total ?? 0
+stats.published = (allRes as any).meta?.total ?? 0
 stats.drafts = stats.posts - stats.published
-stats.tags = tagsRes.length ?? 0
+stats.tags = Array.isArray(tagsRes) ? tagsRes.length : 0
 </script>

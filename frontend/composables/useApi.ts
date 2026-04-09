@@ -7,14 +7,15 @@ function getBaseUrl() {
   }
 }
 
-function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  return $fetch<T>(`${getBaseUrl()}${path}`, {
+async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await $fetch<{ success: boolean; data: T }>(`${getBaseUrl()}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
   })
+  return res.data
 }
 
 // ---- Posts ----

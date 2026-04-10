@@ -2,6 +2,7 @@
 definePageMeta({ layout: 'default' })
 
 const config = useRuntimeConfig()
+const postsApi = usePostsApi()
 
 useSeoMeta({
   title: config.public.siteName,
@@ -10,20 +11,19 @@ useSeoMeta({
   ogDescription: config.public.siteDescription,
 })
 
-// 获取所有文章（按日期倒序）
-const { data: allPosts } = await useAsyncData('all-posts', () =>
-  queryContent('/posts')
-    .sort({ date: -1 })
-    .only(['_path', 'title', 'date', 'tags', 'excerpt', 'cover'])
-    .find()
+// 从后端获取所有已发布文章
+const { data: postsData } = await useAsyncData('all-posts', () =>
+  postsApi.list({ published: 'true', limit: 1000 })
 )
+
+const allPosts = computed(() => (postsData.value as any)?.data ?? [])
 
 // 计算所有标签（去重 + 按频次排序）
 const allTags = computed(() => {
   const map = new Map<string, number>()
-  for (const post of allPosts.value ?? []) {
+  for (const post of allPosts.value) {
     for (const tag of post.tags ?? []) {
-      map.set(tag, (map.get(tag) ?? 0) + 1)
+      map.set(tag.name, (map.get(tag.name) ?? 0) + 1)
     }
   }
   return [...map.entries()]
@@ -36,11 +36,11 @@ const activeTag = ref<string | null>(null)
 
 // 过滤后的文章
 const filteredPosts = computed(() => {
-  if (!activeTag.value) return allPosts.value ?? []
-  return (allPosts.value ?? []).filter(p => p.tags?.includes(activeTag.value!))
+  if (!activeTag.value) return allPosts.value
+  return allPosts.value.filter((p: any) => p.tags?.some((t: any) => t.name === activeTag.value))
 })
 
-// 分页（目录列表一屏可多行，略增大每页条数）
+// 分页
 const PAGE_SIZE = 12
 const currentPage = ref(1)
 
@@ -53,7 +53,6 @@ const pagedPosts = computed(() => {
   return filteredPosts.value.slice(start, start + PAGE_SIZE)
 })
 
-// 估算阅读时间（简单用 excerpt 字数）
 function readingTime(post: { excerpt?: string }) {
   const len = (post.excerpt ?? '').length
   return Math.max(2, Math.round(len / 80))
@@ -63,8 +62,8 @@ function toggleTag(tag: string) {
   activeTag.value = activeTag.value === tag ? null : tag
 }
 
-function postUrl(path: string) {
-  return `/blog/${path.replace(/^\/posts\//, '')}`
+function postUrl(post: any) {
+  return `/blog/${post.slug}`
 }
 
 function formatPostDate(date: string) {
@@ -157,16 +156,16 @@ function formatPostDateCompact(date: string) {
           >
             <NuxtLink
               v-for="post in pagedPosts"
-              :key="post._path"
-              :to="postUrl(post._path)"
+              :key="post.id"
+              :to="postUrl(post)"
               class="group flex items-center gap-3 sm:gap-5 px-4 sm:px-5 py-2 sm:py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
             >
               <time
-                :datetime="post.date"
+                :datetime="post.createdAt"
                 class="shrink-0 w-[4.75rem] sm:w-36 text-xs sm:text-sm text-slate-500 dark:text-slate-400 tabular-nums leading-tight"
               >
-                <span class="sm:hidden">{{ formatPostDateCompact(post.date) }}</span>
-                <span class="hidden sm:inline">{{ formatPostDate(post.date) }}</span>
+                <span class="sm:hidden">{{ formatPostDateCompact(post.createdAt) }}</span>
+                <span class="hidden sm:inline">{{ formatPostDate(post.createdAt) }}</span>
               </time>
 
               <div class="flex-1 min-w-0">
@@ -179,10 +178,10 @@ function formatPostDateCompact(date: string) {
                 <div v-if="post.tags && post.tags.length" class="mt-1.5 flex flex-wrap gap-1.5">
                   <span
                     v-for="tag in post.tags.slice(0, 4)"
-                    :key="tag"
+                    :key="tag.id"
                     class="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] sm:text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400"
                   >
-                    {{ tag }}
+                    {{ tag.name }}
                   </span>
                 </div>
               </div>
@@ -208,7 +207,7 @@ function formatPostDateCompact(date: string) {
                 d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <p class="text-lg font-medium">暂无文章</p>
-            <p class="text-sm mt-1">在 <code class="bg-gray-100 dark:bg-slate-800 px-1 rounded text-gray-600 dark:text-slate-300">content/posts/</code> 下创建 .md 文件即可发布</p>
+            <p class="text-sm mt-1">在后台管理中创建文章并发布即可显示</p>
           </div>
 
           <!-- 分页 -->

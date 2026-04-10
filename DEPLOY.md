@@ -703,3 +703,25 @@ tail -f /www/wwwlogs/deploy.log
 内网面板地址: https://172.24.11.217:8888/ab3fbd34
 username: cda222c6
 password: 83e1cc34
+
+---
+
+## 十二、本地开发
+
+本地开发前端直接连接服务器后端，无需本地运行后端服务。
+
+### 启动步骤
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+前端访问地址：`http://localhost:8080`
+
+数据来源：`https://sunlingyue.cn/api`（服务器后端，无需本地启动）
+
+### 本地后台管理
+
+访问 `http://localhost:8080/admin`，使用服务器 `.env` 中配置的 `ADMIN_PASSWORD` 登录。

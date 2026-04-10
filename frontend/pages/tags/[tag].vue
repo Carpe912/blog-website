@@ -3,38 +3,32 @@ definePageMeta({ layout: 'default' })
 
 const config = useRuntimeConfig()
 const route = useRoute()
-const router = useRouter()
+const postsApi = usePostsApi()
+const tagsApi = useTagsApi()
 
-// 当前标签（来自 URL 参数 /tags/xxx 或查询参数 ?tag=xxx）
 const currentTag = computed(() =>
-  (route.params.tag as string) ? decodeURIComponent(route.params.tag as string) : null
+  route.params.tag ? decodeURIComponent(route.params.tag as string) : null
 )
 
-// 所有文章
-const { data: allPosts } = await useAsyncData('all-posts-tags', () =>
-  queryContent('/posts')
-    .sort({ date: -1 })
-    .only(['_path', 'title', 'date', 'tags', 'excerpt', 'cover'])
-    .find()
+// 获取所有标签
+const allTags = await tagsApi.list() as any[]
+
+// 找到当前标签的 id
+const currentTagObj = computed(() =>
+  allTags.find((t: any) => t.name === currentTag.value)
 )
 
-// 所有标签（带计数）
-const allTags = computed(() => {
-  const map = new Map<string, number>()
-  for (const post of allPosts.value ?? []) {
-    for (const tag of (post.tags ?? [])) {
-      map.set(tag, (map.get(tag) ?? 0) + 1)
-    }
-  }
-  return [...map.entries()].sort((a, b) => b[1] - a[1]).map(([tag, count]) => ({ tag, count }))
-})
-
-// 当前标签下的文章
-const filteredPosts = computed(() =>
-  currentTag.value
-    ? (allPosts.value ?? []).filter(p => p.tags?.includes(currentTag.value!))
-    : (allPosts.value ?? [])
+// 获取该标签下的文章
+const { data: postsData } = await useAsyncData(
+  `posts-tag-${currentTag.value}`,
+  () => postsApi.list({
+    published: 'true',
+    limit: 1000,
+    ...(currentTagObj.value ? { tagId: currentTagObj.value.id } : {}),
+  })
 )
+
+const filteredPosts = computed(() => (postsData.value as any)?.data ?? [])
 
 useSeoMeta({
   title: currentTag.value
@@ -43,8 +37,8 @@ useSeoMeta({
   description: `${config.public.siteName} 的文章标签页`,
 })
 
-function postUrl(path: string) {
-  return `/blog/${path.replace(/^\/posts\//, '')}`
+function postUrl(post: any) {
+  return `/blog/${post.slug}`
 }
 
 function formattedDate(date: string) {
@@ -61,7 +55,7 @@ function formattedDate(date: string) {
         {{ currentTag ? `「${currentTag}」` : '所有标签' }}
       </h1>
       <p class="text-gray-500 dark:text-slate-400 text-sm">
-        {{ currentTag ? `共 ${filteredPosts.length} 篇文章` : `共 ${allTags.length} 个标签，${allPosts?.length} 篇文章` }}
+        共 {{ filteredPosts.length }} 篇文章
       </p>
     </div>
 
@@ -74,16 +68,16 @@ function formattedDate(date: string) {
           class="tag-pill-lg transition-all"
           :class="!currentTag ? 'bg-primary-600 text-white border-primary-600 dark:border-primary-500' : ''"
         >
-          全部 <span class="ml-1 opacity-70 text-xs">{{ allPosts?.length }}</span>
+          全部
         </NuxtLink>
         <NuxtLink
-          v-for="{ tag, count } in allTags"
-          :key="tag"
-          :to="`/tags/${encodeURIComponent(tag)}`"
+          v-for="tag in allTags"
+          :key="tag.id"
+          :to="`/tags/${encodeURIComponent(tag.name)}`"
           class="tag-pill-lg transition-all"
-          :class="currentTag === tag ? 'bg-primary-600 text-white border-primary-600 dark:border-primary-500' : ''"
+          :class="currentTag === tag.name ? 'bg-primary-600 text-white border-primary-600 dark:border-primary-500' : ''"
         >
-          {{ tag }} <span class="ml-1 opacity-60 text-xs">{{ count }}</span>
+          {{ tag.name }} <span class="ml-1 opacity-60 text-xs">{{ tag._count ? tag._count.posts : 0 }}</span>
         </NuxtLink>
       </div>
     </div>
@@ -92,17 +86,17 @@ function formattedDate(date: string) {
     <div v-if="filteredPosts.length" class="space-y-4">
       <NuxtLink
         v-for="post in filteredPosts"
-        :key="post._path"
-        :to="postUrl(post._path)"
+        :key="post.id"
+        :to="postUrl(post)"
         class="group flex items-start gap-4 p-5 bg-white rounded-2xl border border-gray-100 shadow-sm hover:border-primary-200 hover:shadow-md dark:bg-slate-900 dark:border-slate-800 dark:hover:border-primary-800 transition-all"
       >
-        <!-- 日期竖线 -->
+        <!-- 日期 -->
         <div class="shrink-0 text-center w-14 pt-0.5">
           <p class="text-lg font-bold text-primary-600 dark:text-primary-400 leading-none">
-            {{ new Date(post.date).getDate() }}
+            {{ new Date(post.createdAt).getDate() }}
           </p>
           <p class="text-xs text-gray-400 dark:text-slate-500 mt-0.5">
-            {{ new Date(post.date).toLocaleDateString('zh-CN', { month: 'short', year: 'numeric' }) }}
+            {{ new Date(post.createdAt).toLocaleDateString('zh-CN', { month: 'short', year: 'numeric' }) }}
           </p>
         </div>
 
@@ -118,12 +112,12 @@ function formattedDate(date: string) {
           </p>
           <div class="flex flex-wrap gap-1.5">
             <span
-              v-for="tag in post.tags?.slice(0, 4)"
-              :key="tag"
+              v-for="tag in post.tags"
+              :key="tag.id"
               class="tag-pill"
-              :class="tag === currentTag ? 'bg-primary-100 border-primary-200 dark:bg-primary-950 dark:border-primary-800' : ''"
+              :class="tag.name === currentTag ? 'bg-primary-100 border-primary-200 dark:bg-primary-950 dark:border-primary-800' : ''"
             >
-              {{ tag }}
+              {{ tag.name }}
             </span>
           </div>
         </div>

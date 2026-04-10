@@ -8,14 +8,16 @@ function getBaseUrl() {
 }
 
 async function apiFetch<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const res = await $fetch<{ success: boolean; data: T }>(`${getBaseUrl()}${path}`, {
+  const res = await $fetch<any>(`${getBaseUrl()}${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
   })
-  return res.data
+  // DELETE 接口返回 204 No Content，res 为空
+  if (!res || typeof res !== 'object') return res as T
+  return ('data' in res ? res.data : res) as T
 }
 
 // ---- Posts ----

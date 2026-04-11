@@ -537,7 +537,7 @@ pm2 save
 
 ---
 
-### 方式一：GitHub Actions 自动部署（推荐）
+### 方式一：GitHub Actions 自动部署（推荐）1
 
 推送到 `main` 分支后，GitHub Actions 自动 SSH 连接服务器执行部署脚本。
 

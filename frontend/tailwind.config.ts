@@ -37,6 +37,25 @@ export default {
           css: {
             maxWidth: 'none',
             color: theme('colors.gray.700'),
+            // 整体行高收紧
+            lineHeight: '1.7',
+            // 段落间距
+            p: { marginTop: '0.75em', marginBottom: '0.75em' },
+            // 标题间距
+            h1: { marginTop: '1.5em', marginBottom: '0.5em' },
+            h2: { marginTop: '1.4em', marginBottom: '0.4em' },
+            h3: { marginTop: '1.2em', marginBottom: '0.35em' },
+            h4: { marginTop: '1em',   marginBottom: '0.3em' },
+            // 列表间距
+            ul: { marginTop: '0.5em', marginBottom: '0.5em' },
+            ol: { marginTop: '0.5em', marginBottom: '0.5em' },
+            li: { marginTop: '0.25em', marginBottom: '0.25em' },
+            // 代码块间距
+            pre: { marginTop: '0.75em', marginBottom: '0.75em', borderRadius: '0.75rem', border: `1px solid ${theme('colors.gray.200')}` },
+            // 分割线间距
+            hr: { marginTop: '1.5em', marginBottom: '1.5em', borderColor: theme('colors.gray.200') },
+            // 引用块间距
+            blockquote: { marginTop: '0.75em', marginBottom: '0.75em', borderLeftColor: theme('colors.primary.400'), backgroundColor: theme('colors.primary.50'), borderRadius: '0 0.5rem 0.5rem 0', padding: '0.75rem 1.25rem', color: theme('colors.gray.700'), fontStyle: 'normal' },
             a: {
               color: theme('colors.primary.600'),
               textDecoration: 'none',
@@ -57,26 +76,13 @@ export default {
             },
             'code::before': { content: '""' },
             'code::after': { content: '""' },
-            pre: {
-              borderRadius: '0.75rem',
-              border: `1px solid ${theme('colors.gray.200')}`,
-            },
             'pre code': {
               backgroundColor: 'transparent',
               padding: 0,
             },
-            blockquote: {
-              borderLeftColor: theme('colors.primary.400'),
-              backgroundColor: theme('colors.primary.50'),
-              borderRadius: '0 0.5rem 0.5rem 0',
-              padding: '0.75rem 1.25rem',
-              color: theme('colors.gray.700'),
-              fontStyle: 'normal',
-            },
             'blockquote p:first-of-type::before': { content: '""' },
             'blockquote p:last-of-type::after': { content: '""' },
             img: { borderRadius: '0.75rem' },
-            hr: { borderColor: theme('colors.gray.200') },
             table: {
               fontSize: '0.875rem',
             },

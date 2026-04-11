@@ -4,3 +4,4 @@ dist
 .nuxt
 .vscode
 .output
+scripts/

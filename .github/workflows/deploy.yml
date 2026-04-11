@@ -38,7 +38,7 @@ jobs:
 
             echo "===== [2/6] 安装依赖（workspaces 统一安装）====="
             cd $PROJECT_DIR
-            rm -rf node_modules
+            rm -rf node_modules backend/node_modules frontend/node_modules
             npm install
 
             echo "===== [3/6] Prisma 生成 & 迁移 ====="

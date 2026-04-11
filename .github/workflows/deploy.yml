@@ -35,23 +35,22 @@ jobs:
             # 切换淘宝 npm 镜像
             npm config set registry https://registry.npmmirror.com
 
-            echo "===== [2/6] 安装后端依赖 ====="
-            cd $PROJECT_DIR/backend
+            echo "===== [2/6] 安装依赖（workspaces 统一安装）====="
+            cd $PROJECT_DIR
             rm -rf node_modules
             npm install
 
             echo "===== [3/6] Prisma 生成 & 迁移 ====="
+            cd $PROJECT_DIR/backend
             npx prisma generate
             npx prisma migrate deploy
 
             echo "===== [4/6] 构建后端 ====="
-            npm run build
+            cd $PROJECT_DIR
+            npm run build:backend
 
-            echo "===== [5/6] 安装前端依赖 & 构建 ====="
-            cd $PROJECT_DIR/frontend
-            rm -rf node_modules
-            npm install
-            npm run build
+            echo "===== [5/6] 构建前端 ====="
+            npm run build:frontend
 
             echo "===== [6/6] PM2 重启服务 ====="
             pm2 restart blog-backend

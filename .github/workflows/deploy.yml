@@ -11,6 +11,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Debug secrets
+        run: |
+          echo "HOST set: ${{ secrets.SSH_HOST != '' }}"
+          echo "PORT set: ${{ secrets.SSH_PORT != '' }}"
+          echo "USER set: ${{ secrets.SSH_USER != '' }}"
+          echo "KEY set: ${{ secrets.SSH_PRIVATE_KEY != '' }}"
+
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:

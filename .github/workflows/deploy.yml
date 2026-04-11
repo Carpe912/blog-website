@@ -26,7 +26,7 @@ jobs:
 
             echo "===== [1/6] 拉取最新代码 ====="
             cd $PROJECT_DIR
-            git checkout -- .
+            git reset --hard HEAD
             git pull origin main
 
             # 加载 nvm（非交互式 shell 需手动 source）

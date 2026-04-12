@@ -55,6 +55,11 @@ export class PostsController {
     return this.postsService.update(id, dto);
   }
 
+  @Post(':id/refresh-keywords')
+  refreshKeywords(@Param('id', ParseIntPipe) id: number) {
+    return this.postsService.refreshKeywords(id);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseIntPipe) id: number) {

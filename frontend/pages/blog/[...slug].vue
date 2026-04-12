@@ -92,7 +92,7 @@ const readingTime = computed(() => {
     </div>
 
     <!-- 正文 -->
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 pt-10 pb-20">
       <article
         class="prose prose-gray max-w-none dark:prose-invert prose-headings:scroll-mt-20 prose-img:rounded-xl prose-a:text-primary-600 dark:prose-a:text-primary-400"
         v-html="renderedContent"

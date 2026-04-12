@@ -7,7 +7,7 @@ const isActive = (path: string) => route.path === path
 const navLinks = [
   { label: '首页', to: '/' },
   { label: '标签', to: '/tags' },
-  { label: '关于', to: '/about' },
+  // { label: '关于', to: '/about' },
 ]
 
 // 移动端菜单

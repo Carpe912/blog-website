@@ -31,7 +31,6 @@ onMounted(() => {
             <nav class="flex items-center gap-3">
               <NuxtLink to="/" class="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">首页</NuxtLink>
               <NuxtLink to="/tags" class="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">标签</NuxtLink>
-              <NuxtLink to="/about" class="hover:text-slate-700 dark:hover:text-slate-300 transition-colors">关于</NuxtLink>
             </nav>
             <span class="text-slate-300 dark:text-slate-700">|</span>
             <span>© {{ year }} {{ config.public.author }}</span>

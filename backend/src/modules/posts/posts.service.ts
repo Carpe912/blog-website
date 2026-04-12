@@ -134,6 +134,31 @@ export class PostsService {
     return this.prisma.post.delete({ where: { id } });
   }
 
+  async findAdjacentBySlug(slug: string) {
+    const post = await this.prisma.post.findUnique({
+      where: { slug },
+      select: { id: true, createdAt: true },
+    });
+    if (!post) throw new NotFoundException(`文章 "${slug}" 不存在`);
+
+    const [prev, next] = await Promise.all([
+      // 上一篇：比当前文章更早，取最新的一篇
+      this.prisma.post.findFirst({
+        where: { published: true, createdAt: { lt: post.createdAt } },
+        orderBy: { createdAt: 'desc' },
+        select: { title: true, slug: true },
+      }),
+      // 下一篇：比当前文章更新，取最旧的一篇
+      this.prisma.post.findFirst({
+        where: { published: true, createdAt: { gt: post.createdAt } },
+        orderBy: { createdAt: 'asc' },
+        select: { title: true, slug: true },
+      }),
+    ]);
+
+    return { prev: prev ?? null, next: next ?? null };
+  }
+
   private formatPost(post: any) {
     return {
       ...post,

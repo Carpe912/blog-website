@@ -26,6 +26,10 @@ export const usePostsApi = () => ({
     apiFetch<any>('/posts?' + new URLSearchParams(params).toString()),
   get: (id: number) => apiFetch<any>(`/posts/${id}`),
   getBySlug: (slug: string) => apiFetch<any>(`/posts/slug/${slug}`),
+  getAdjacentBySlug: (slug: string) =>
+    apiFetch<{ prev: { title: string; slug: string } | null; next: { title: string; slug: string } | null }>(
+      `/posts/slug/${slug}/adjacent`
+    ),
   create: (data: any) => apiFetch<any>('/posts', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) =>
     apiFetch<any>(`/posts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

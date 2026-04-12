@@ -30,6 +30,11 @@ export class PostsController {
     return this.postsService.findBySlug(slug);
   }
 
+  @Get('slug/:slug/adjacent')
+  findAdjacentBySlug(@Param('slug') slug: string) {
+    return this.postsService.findAdjacentBySlug(slug);
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.postsService.findOne(id);

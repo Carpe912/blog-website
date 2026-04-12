@@ -58,12 +58,25 @@ function setupMarked() {
   marked.use({
     renderer: {
       // 标题加 id，供 TOC 锚点使用
-      // raw 在部分 marked 版本的某些 heading 场景下可能为 undefined，
-      // 降级用 text（先剥离内联 HTML 标签再生成 id）
-      heading({ text, depth, raw }: { text: string; depth: number; raw?: string }) {
-        const source = (raw ?? text)
-          .replace(/^#{1,6}\s+/, '')   // 去掉 raw 里的 ## 前缀
-          .replace(/<[^>]+>/g, '')     // 去掉内联 HTML（如 <code>）
+      // marked v9 内部在不同路径下会用两种调用约定：
+      //   新式：heading(token)          token = { text, depth, raw, tokens }
+      //   旧式：heading(text, level, raw) 位置参数
+      // 统一兼容处理，避免解构时拿到 undefined
+      heading(tokenOrText: any, depthArg?: number, rawArg?: string) {
+        let text: string, depth: number, raw: string | undefined
+        if (tokenOrText !== null && typeof tokenOrText === 'object') {
+          text  = String(tokenOrText.text  ?? '')
+          depth = Number(tokenOrText.depth ?? 1)
+          raw   = tokenOrText.raw
+        } else {
+          text  = String(tokenOrText ?? '')
+          depth = depthArg ?? 1
+          raw   = rawArg
+        }
+
+        const source = (typeof raw === 'string' ? raw : text)
+          .replace(/^#{1,6}\s+/, '')  // 去掉 raw 里的 ## 前缀
+          .replace(/<[^>]+>/g, '')    // 去掉内联 HTML（如 <code>）
         const id = source
           .toLowerCase()
           .trim()
@@ -72,7 +85,7 @@ function setupMarked() {
           .replace(/-+/g, '-')
           .replace(/^-|-$/g, '')
           .slice(0, 80)
-        return `<h${depth} id="${id}">${text}</h${depth}>\n`
+        return `<h${depth} id="${id || 'heading'}">${text}</h${depth}>\n`
       },
 
       // 代码块：hljs 高亮 + data-lang 属性（供 useCodeCopy 读取）

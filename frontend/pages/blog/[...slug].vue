@@ -4,7 +4,7 @@ definePageMeta({ layout: 'default' })
 const route = useRoute()
 const config = useRuntimeConfig()
 const postsApi = usePostsApi()
-const { render: renderMd } = useMarked()
+const { render: renderMarkdown } = useMarked()
 
 const slug = computed(() =>
   Array.isArray(route.params.slug) ? route.params.slug.join('/') : route.params.slug
@@ -19,11 +19,17 @@ if (!post.value) {
   throw createError({ statusCode: 404, statusMessage: '文章不存在' })
 }
 
-// 上一篇 / 下一篇 & 相关文章（并行请求）
-const [{ data: adjacent }, { data: related }] = await Promise.all([
-  useAsyncData(`adjacent-${slug.value}`, () => postsApi.getAdjacentBySlug(slug.value)),
-  useAsyncData(`related-${slug.value}`,  () => postsApi.getRelatedBySlug(slug.value)),
-])
+// 上一篇 / 下一篇
+const { data: adjacent } = await useAsyncData(
+  `adjacent-${slug.value}`,
+  () => postsApi.getAdjacentBySlug(slug.value)
+)
+
+// 相关文章
+const { data: related } = await useAsyncData(
+  `related-${slug.value}`,
+  () => postsApi.getRelatedBySlug(slug.value)
+)
 
 // SEO
 useSeoMeta({
@@ -33,10 +39,10 @@ useSeoMeta({
   ogDescription: post.value.excerpt ?? '',
 })
 
-// 渲染 Markdown（使用 useMarked，含 hljs 高亮 + 标题 id）
+// 渲染 markdown（使用 useMarked，内含 hljs 高亮 + heading id）
 const renderedContent = computed(() => {
   if (!post.value?.content) return ''
-  return renderMd(post.value.content)
+  return renderMarkdown(post.value.content)
 })
 
 const formattedDate = computed(() => {
@@ -53,10 +59,16 @@ const readingTime = computed(() => {
   return Math.max(2, Math.round(text.length / 400))
 })
 
-// ── TOC & 代码复制（依赖 articleRef DOM）────────────────────────────────────
+// ── TOC ────────────────────────────────────────────────────────────────────
 const articleRef = ref<HTMLElement | null>(null)
 const { headings, activeId } = useToc(renderedContent, articleRef)
+
+// ── 代码块复制按钮 ──────────────────────────────────────────────────────────
 useCodeCopy(articleRef)
+
+function relatedDate(date: string) {
+  return new Date(date).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+}
 </script>
 
 <template>
@@ -97,11 +109,11 @@ useCodeCopy(articleRef)
       </div>
     </div>
 
-    <!-- 正文区域：两栏布局（文章 + TOC 侧边栏） -->
+    <!-- 正文 + TOC 双栏布局 -->
     <div class="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-20">
       <div class="flex gap-10 items-start">
 
-        <!-- 左：文章正文 -->
+        <!-- 左：正文 -->
         <div class="flex-1 min-w-0">
           <article
             ref="articleRef"
@@ -124,25 +136,28 @@ useCodeCopy(articleRef)
             </div>
           </div>
 
-          <!-- 相关文章 -->
+          <!-- 相关文章推荐 -->
           <div v-if="related && related.length" class="mt-12 pt-8 border-t border-gray-100 dark:border-slate-800">
-            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4">相关文章</p>
+            <p class="text-sm text-gray-500 dark:text-slate-400 mb-4 font-medium">相关文章</p>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <NuxtLink
-                v-for="rel in related"
-                :key="rel.id"
-                :to="`/blog/${rel.slug}`"
+                v-for="item in related"
+                :key="item.id"
+                :to="`/blog/${item.slug}`"
                 class="group flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-3.5 hover:border-slate-300 hover:shadow-sm transition-all dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
               >
-                <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-slate-100 line-clamp-2 leading-snug transition-colors">
-                  {{ rel.title }}
+                <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-slate-100 line-clamp-2 transition-colors leading-snug">
+                  {{ item.title }}
                 </span>
-                <div class="flex flex-wrap gap-1 mt-0.5">
+                <div class="flex items-center gap-2 flex-wrap">
                   <span
-                    v-for="tag in (rel.tags ?? []).slice(0, 3)"
+                    v-for="tag in (item.tags || []).slice(0, 3)"
                     :key="tag.id"
                     class="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
                   >{{ tag.name }}</span>
+                  <span class="ml-auto text-[10px] text-slate-400 dark:text-slate-500 tabular-nums shrink-0">
+                    {{ relatedDate(item.createdAt) }}
+                  </span>
                 </div>
               </NuxtLink>
             </div>
@@ -151,7 +166,7 @@ useCodeCopy(articleRef)
           <!-- 上一篇 / 下一篇 -->
           <div
             v-if="adjacent && (adjacent.prev || adjacent.next)"
-            class="mt-8 pt-8 border-t border-gray-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3"
+            class="mt-8 grid grid-cols-1 sm:grid-cols-2 gap-3"
           >
             <NuxtLink
               v-if="adjacent.prev"
@@ -189,23 +204,22 @@ useCodeCopy(articleRef)
           </div>
         </div>
 
-        <!-- 右：TOC 目录侧边栏（仅桌面端，且有标题时显示） -->
+        <!-- 右：TOC 浮动目录（仅桌面端，有标题时才显示） -->
         <aside
           v-if="headings.length >= 2"
-          class="hidden xl:block w-52 shrink-0 sticky top-24 self-start"
+          class="hidden xl:block w-52 shrink-0 sticky top-24 max-h-[calc(100vh-7rem)] overflow-y-auto"
         >
-          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">目录</p>
+          <p class="text-[11px] font-medium uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">目录</p>
           <nav>
             <a
               v-for="h in headings"
               :key="h.id"
               :href="`#${h.id}`"
               class="toc-link"
-              :class="[
-                h.level === 3 ? 'toc-h3' : '',
-                activeId === h.id ? 'active' : '',
-              ]"
-            >{{ h.text }}</a>
+              :class="[h.level === 3 ? 'toc-h3' : '', activeId === h.id ? 'active' : '']"
+            >
+              {{ h.text }}
+            </a>
           </nav>
         </aside>
 

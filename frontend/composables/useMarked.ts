@@ -24,7 +24,9 @@ import langSql        from 'highlight.js/lib/languages/sql'
 import langTs         from 'highlight.js/lib/languages/typescript'
 import langXml        from 'highlight.js/lib/languages/xml'
 import langYaml       from 'highlight.js/lib/languages/yaml'
+import langPlaintext  from 'highlight.js/lib/languages/plaintext'
 
+hljs.registerLanguage('plaintext',  langPlaintext)
 hljs.registerLanguage('bash',       langBash)
 hljs.registerLanguage('sh',         langShell)
 hljs.registerLanguage('shell',      langShell)

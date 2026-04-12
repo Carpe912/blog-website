@@ -158,18 +158,10 @@ function formatPostDateCompact(date: string) {
               v-for="post in pagedPosts"
               :key="post.id"
               :to="postUrl(post)"
-              class="group flex items-center gap-3 sm:gap-5 px-4 sm:px-5 py-2 sm:py-2.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
+              class="group flex items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3 sm:py-3.5 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors"
             >
-              <time
-                :datetime="post.createdAt"
-                class="shrink-0 w-[4.75rem] sm:w-36 text-xs sm:text-sm text-slate-500 dark:text-slate-400 tabular-nums leading-tight"
-              >
-                <span class="sm:hidden">{{ formatPostDateCompact(post.createdAt) }}</span>
-                <span class="hidden sm:inline">{{ formatPostDate(post.createdAt) }}</span>
-              </time>
-
               <div class="flex-1 min-w-0">
-                <h2 class="text-sm sm:text-base font-medium text-slate-900 dark:text-slate-100 truncate group-hover:text-slate-700 dark:group-hover:text-slate-200 transition-colors">
+                <h2 class="text-sm sm:text-base font-medium text-slate-900 dark:text-slate-100 group-hover:text-slate-700 dark:group-hover:text-slate-200 transition-colors leading-snug">
                   {{ post.title }}
                 </h2>
                 <p v-if="post.excerpt" class="mt-0.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400 truncate">
@@ -184,14 +176,12 @@ function formatPostDateCompact(date: string) {
                     {{ tag.name }}
                   </span>
                 </div>
-              </div>
-
-              <div class="hidden sm:flex shrink-0 items-center gap-1 text-xs text-slate-400 dark:text-slate-500 tabular-nums">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-                {{ readingTime(post) }} 分钟
+                <!-- 日期 + 阅读时长：极弱化，仅作辅助信息 -->
+                <div class="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-300 dark:text-slate-600 tabular-nums">
+                  <time :datetime="post.createdAt">{{ formatPostDateCompact(post.createdAt) }}</time>
+                  <span aria-hidden="true">·</span>
+                  <span>{{ readingTime(post) }} 分钟</span>
+                </div>
               </div>
 
               <svg class="w-4 h-4 sm:w-5 sm:h-5 text-slate-300 dark:text-slate-600 group-hover:text-slate-500 dark:group-hover:text-slate-400 shrink-0 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">

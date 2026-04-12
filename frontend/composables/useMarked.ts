@@ -58,8 +58,13 @@ function setupMarked() {
   marked.use({
     renderer: {
       // 标题加 id，供 TOC 锚点使用
-      heading({ text, depth, raw }: { text: string; depth: number; raw: string }) {
-        const id = raw
+      // raw 在部分 marked 版本的某些 heading 场景下可能为 undefined，
+      // 降级用 text（先剥离内联 HTML 标签再生成 id）
+      heading({ text, depth, raw }: { text: string; depth: number; raw?: string }) {
+        const source = (raw ?? text)
+          .replace(/^#{1,6}\s+/, '')   // 去掉 raw 里的 ## 前缀
+          .replace(/<[^>]+>/g, '')     // 去掉内联 HTML（如 <code>）
+        const id = source
           .toLowerCase()
           .trim()
           .replace(/\s+/g, '-')

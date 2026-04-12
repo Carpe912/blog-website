@@ -53,9 +53,9 @@ const pagedPosts = computed(() => {
   return filteredPosts.value.slice(start, start + PAGE_SIZE)
 })
 
-function readingTime(post: { excerpt?: string }) {
-  const len = (post.excerpt ?? '').length
-  return Math.max(2, Math.round(len / 80))
+function readingTime(post: { excerpt?: string; content?: string }) {
+  const len = (post.content ?? post.excerpt ?? '').length
+  return Math.max(1, Math.round(len / 400))
 }
 
 function toggleTag(tag: string) {
@@ -167,20 +167,22 @@ function formatPostDateCompact(date: string) {
                 <p v-if="post.excerpt" class="mt-0.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400 truncate">
                   {{ post.excerpt }}
                 </p>
-                <div v-if="post.tags && post.tags.length" class="mt-1.5 flex flex-wrap gap-1.5">
-                  <span
-                    v-for="tag in post.tags.slice(0, 4)"
-                    :key="tag.id"
-                    class="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] sm:text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400"
-                  >
-                    {{ tag.name }}
-                  </span>
-                </div>
-                <!-- 日期 + 阅读时长：极弱化，仅作辅助信息 -->
-                <div class="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-300 dark:text-slate-600 tabular-nums">
-                  <time :datetime="post.createdAt">{{ formatPostDateCompact(post.createdAt) }}</time>
-                  <span aria-hidden="true">·</span>
-                  <span>{{ readingTime(post) }} 分钟</span>
+                <!-- 标签 + 日期/阅读时长同一行，时间右对齐 -->
+                <div class="mt-1.5 flex items-center gap-1.5">
+                  <div class="flex flex-wrap gap-1.5 flex-1 min-w-0">
+                    <span
+                      v-for="tag in post.tags ? post.tags.slice(0, 4) : []"
+                      :key="tag.id"
+                      class="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] sm:text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-400"
+                    >
+                      {{ tag.name }}
+                    </span>
+                  </div>
+                  <div class="shrink-0 ml-auto flex items-center gap-1 text-[10px] text-slate-300 dark:text-slate-600 tabular-nums">
+                    <time :datetime="post.createdAt">{{ formatPostDateCompact(post.createdAt) }}</time>
+                    <span aria-hidden="true">·</span>
+                    <span>{{ readingTime(post) }} 分钟</span>
+                  </div>
                 </div>
               </div>
 

@@ -97,3 +97,57 @@
 :target {
   scroll-margin-top: 5rem;
 }
+
+/* ===== highlight.js 代码块样式 ===== */
+
+/* 重置 prose 对 pre/code 的默认样式，交由 hljs 控制 */
+.prose .code-block-wrapper {
+  @apply my-6 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700;
+}
+.prose .code-block-wrapper pre {
+  @apply my-0 rounded-none bg-transparent p-0;
+}
+.prose .code-block-wrapper code {
+  @apply block overflow-x-auto px-5 py-4 text-sm leading-relaxed;
+  font-family: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+}
+
+/* 代码工具栏（语言标签 + 复制按钮） */
+.code-toolbar {
+  @apply flex items-center justify-between px-4 py-2
+         bg-slate-100 dark:bg-slate-800
+         border-b border-slate-200 dark:border-slate-700;
+}
+.code-lang {
+  @apply text-[11px] font-mono font-medium text-slate-400 dark:text-slate-500 uppercase tracking-widest select-none;
+}
+.code-copy-btn {
+  @apply text-xs text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200
+         px-2 py-0.5 rounded border border-transparent hover:border-slate-300 dark:hover:border-slate-600
+         transition-all cursor-pointer select-none;
+}
+.code-copy-btn.copied {
+  @apply text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-700;
+}
+
+/* hljs 亮色主题 token（GitHub 风格） */
+.hljs { @apply bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-200; }
+.hljs-comment, .hljs-quote          { @apply text-slate-400 dark:text-slate-500 italic; }
+.hljs-keyword, .hljs-selector-tag,
+.hljs-built_in, .hljs-name,
+.hljs-tag                           { @apply text-violet-600 dark:text-violet-400 font-medium; }
+.hljs-string, .hljs-attr,
+.hljs-selector-attr,
+.hljs-selector-pseudo               { @apply text-emerald-600 dark:text-emerald-400; }
+.hljs-number, .hljs-literal,
+.hljs-variable, .hljs-template-variable,
+.hljs-tag .hljs-attr                { @apply text-orange-500 dark:text-orange-400; }
+.hljs-type, .hljs-class .hljs-title,
+.hljs-title                         { @apply text-amber-600 dark:text-amber-400 font-semibold; }
+.hljs-section                       { @apply text-blue-600 dark:text-blue-400 font-bold; }
+.hljs-symbol, .hljs-bullet,
+.hljs-link, .hljs-meta              { @apply text-cyan-600 dark:text-cyan-400; }
+.hljs-deletion                      { @apply text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950; }
+.hljs-addition                      { @apply text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950; }
+.hljs-emphasis                      { @apply italic; }
+.hljs-strong                        { @apply font-bold; }

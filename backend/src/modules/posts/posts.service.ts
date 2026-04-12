@@ -17,6 +17,7 @@ export class PostsService {
       where.OR = [
         { title: { contains: search, mode: 'insensitive' } },
         { excerpt: { contains: search, mode: 'insensitive' } },
+        { content: { contains: search, mode: 'insensitive' } },
       ];
     }
     if (published !== undefined) where.published = published;
@@ -134,6 +135,7 @@ export class PostsService {
     return this.prisma.post.delete({ where: { id } });
   }
 
+  // ── 上一篇 / 下一篇 ───────────────────────────────────────────────────────
   async findAdjacentBySlug(slug: string) {
     const post = await this.prisma.post.findUnique({
       where: { slug },
@@ -142,13 +144,13 @@ export class PostsService {
     if (!post) throw new NotFoundException(`文章 "${slug}" 不存在`);
 
     const [prev, next] = await Promise.all([
-      // 上一篇：比当前文章更早，取最新的一篇
+      // 上一篇：时间更早，取最近的一篇
       this.prisma.post.findFirst({
         where: { published: true, createdAt: { lt: post.createdAt } },
         orderBy: { createdAt: 'desc' },
         select: { title: true, slug: true },
       }),
-      // 下一篇：比当前文章更新，取最旧的一篇
+      // 下一篇：时间更新，取最早的一篇
       this.prisma.post.findFirst({
         where: { published: true, createdAt: { gt: post.createdAt } },
         orderBy: { createdAt: 'asc' },
@@ -157,6 +159,101 @@ export class PostsService {
     ]);
 
     return { prev: prev ?? null, next: next ?? null };
+  }
+
+  // ── 相关文章（按标签重叠度排序，补充内容关键词相似度） ────────────────────
+  async findRelatedBySlug(slug: string, limit = 4) {
+    // 1. 获取当前文章的标签和摘要关键词
+    const post = await this.prisma.post.findUnique({
+      where: { slug },
+      select: {
+        id: true,
+        title: true,
+        excerpt: true,
+        tags: { select: { tagId: true } },
+      },
+    });
+    if (!post) throw new NotFoundException(`文章 "${slug}" 不存在`);
+
+    const tagIds = post.tags.map((pt) => pt.tagId);
+
+    // 2. 候选池：有共同标签的已发布文章（取多一些再重排序）
+    const hasTags = tagIds.length > 0;
+    const candidates = await this.prisma.post.findMany({
+      where: {
+        published: true,
+        NOT: { id: post.id },
+        ...(hasTags ? { tags: { some: { tagId: { in: tagIds } } } } : {}),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit * 5,
+      include: {
+        tags: {
+          include: { tag: { select: { id: true, name: true, slug: true } } },
+        },
+      },
+    });
+
+    // 3. 若候选不足，补充最新文章
+    if (candidates.length < limit) {
+      const ids = candidates.map((c) => c.id);
+      const extra = await this.prisma.post.findMany({
+        where: { published: true, NOT: { id: { in: [post.id, ...ids] } } },
+        orderBy: { createdAt: 'desc' },
+        take: limit - candidates.length,
+        include: {
+          tags: {
+            include: { tag: { select: { id: true, name: true, slug: true } } },
+          },
+        },
+      });
+      candidates.push(...extra);
+    }
+
+    // 4. 按标签重叠数 + 标题/摘要关键词命中打分排序
+    const keywords = this._extractKeywords(`${post.title} ${post.excerpt ?? ''}`);
+
+    const scored = candidates.map((c) => {
+      const tagOverlap = c.tags.filter((pt) => tagIds.includes(pt.tagId)).length;
+      const textScore = this._keywordScore(
+        `${c.title} ${c.excerpt ?? ''}`,
+        keywords,
+      );
+      return { post: c, score: tagOverlap * 3 + textScore };
+    });
+
+    scored.sort((a, b) => b.score - a.score);
+
+    return scored.slice(0, limit).map((s) => {
+      const { tags, ...rest } = s.post as any;
+      return { ...rest, tags: tags.map((pt: any) => pt.tag) };
+    });
+  }
+
+  // ── 私有工具 ──────────────────────────────────────────────────────────────
+  private _extractKeywords(text: string): string[] {
+    // 中文按字切分（2-gram），英文按单词切分，过滤停用词
+    const stopWords = new Set(['的', '了', '和', '是', '在', '有', 'the', 'a', 'an', 'of', 'to', 'and', 'for', 'in', 'with']);
+    const words: string[] = [];
+    // 英文单词
+    const enWords = text.match(/[a-zA-Z]{2,}/g) ?? [];
+    enWords.forEach((w) => {
+      if (!stopWords.has(w.toLowerCase())) words.push(w.toLowerCase());
+    });
+    // 中文 2-gram
+    const zhText = text.replace(/[^\u4e00-\u9fa5]/g, '');
+    for (let i = 0; i < zhText.length - 1; i++) {
+      const gram = zhText.slice(i, i + 2);
+      if (!stopWords.has(gram[0]) && !stopWords.has(gram[1])) {
+        words.push(gram);
+      }
+    }
+    return [...new Set(words)];
+  }
+
+  private _keywordScore(text: string, keywords: string[]): number {
+    const lower = text.toLowerCase();
+    return keywords.reduce((score, kw) => score + (lower.includes(kw) ? 1 : 0), 0);
   }
 
   private formatPost(post: any) {

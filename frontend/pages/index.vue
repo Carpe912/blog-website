@@ -34,17 +34,31 @@ const allTags = computed(() => {
 // 当前激活标签
 const activeTag = ref<string | null>(null)
 
-// 过滤后的文章
+// 搜索关键词
+const searchQuery = ref('')
+
+// 过滤后的文章（标签 + 关键词双重过滤）
 const filteredPosts = computed(() => {
-  if (!activeTag.value) return allPosts.value
-  return allPosts.value.filter((p: any) => p.tags?.some((t: any) => t.name === activeTag.value))
+  let posts = allPosts.value
+  if (activeTag.value) {
+    posts = posts.filter((p: any) => p.tags?.some((t: any) => t.name === activeTag.value))
+  }
+  const q = searchQuery.value.trim().toLowerCase()
+  if (q) {
+    posts = posts.filter((p: any) =>
+      p.title?.toLowerCase().includes(q) ||
+      p.excerpt?.toLowerCase().includes(q)
+    )
+  }
+  return posts
 })
 
 // 分页
 const PAGE_SIZE = 12
 const currentPage = ref(1)
 
-watch(activeTag, () => { currentPage.value = 1 })
+watch(activeTag, () => { currentPage.value = 1; searchQuery.value = '' })
+watch(searchQuery, () => { currentPage.value = 1 })
 
 const totalPages = computed(() => Math.ceil(filteredPosts.value.length / PAGE_SIZE))
 
@@ -139,12 +153,41 @@ function formatPostDateCompact(date: string) {
             </div>
           </div>
 
+          <!-- 搜索框 -->
+          <div class="mb-4 relative">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+            </svg>
+            <input
+              v-model="searchQuery"
+              type="search"
+              placeholder="搜索文章标题或摘要…"
+              class="w-full pl-9 pr-4 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 placeholder-slate-400 outline-none focus:border-slate-400 focus:ring-2 focus:ring-slate-200 transition dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder-slate-500 dark:focus:border-slate-500 dark:focus:ring-slate-700"
+            />
+            <button
+              v-if="searchQuery"
+              class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+              @click="searchQuery = ''"
+            >
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+
           <!-- 筛选状态提示 -->
-          <div v-if="activeTag" class="mb-4 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-            <span class="text-slate-400 dark:text-slate-600">筛选：</span>
-            <span class="font-medium text-slate-800 dark:text-slate-200">{{ activeTag }}</span>
+          <div v-if="activeTag || searchQuery" class="mb-4 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+            <template v-if="activeTag">
+              <span class="text-slate-400 dark:text-slate-600">标签：</span>
+              <span class="font-medium text-slate-800 dark:text-slate-200">{{ activeTag }}</span>
+            </template>
+            <template v-if="searchQuery">
+              <span class="text-slate-400 dark:text-slate-600">{{ activeTag ? '·' : '' }} 关键词：</span>
+              <span class="font-medium text-slate-800 dark:text-slate-200">{{ searchQuery }}</span>
+            </template>
             <span class="text-slate-500 dark:text-slate-500">· {{ filteredPosts.length }} 篇</span>
-            <button type="button" class="ml-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs underline underline-offset-2" @click="activeTag = null">清除</button>
+            <button type="button" class="ml-1 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 text-xs underline underline-offset-2"
+              @click="activeTag = null; searchQuery = ''">清除</button>
           </div>
 
           <!-- 文章列表 -->

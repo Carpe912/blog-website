@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { marked } from 'marked'
 definePageMeta({ layout: 'default' })
 
 const route = useRoute()
 const config = useRuntimeConfig()
 const postsApi = usePostsApi()
+const { render: renderMd } = useMarked()
 
 const slug = computed(() =>
   Array.isArray(route.params.slug) ? route.params.slug.join('/') : route.params.slug
@@ -19,10 +19,11 @@ if (!post.value) {
   throw createError({ statusCode: 404, statusMessage: '文章不存在' })
 }
 
-const { data: adjacent } = await useAsyncData(
-  `adjacent-${slug.value}`,
-  () => postsApi.getAdjacentBySlug(slug.value)
-)
+// 上一篇 / 下一篇 & 相关文章（并行请求）
+const [{ data: adjacent }, { data: related }] = await Promise.all([
+  useAsyncData(`adjacent-${slug.value}`, () => postsApi.getAdjacentBySlug(slug.value)),
+  useAsyncData(`related-${slug.value}`,  () => postsApi.getRelatedBySlug(slug.value)),
+])
 
 // SEO
 useSeoMeta({
@@ -32,10 +33,10 @@ useSeoMeta({
   ogDescription: post.value.excerpt ?? '',
 })
 
-// 渲染 markdown
+// 渲染 Markdown（使用 useMarked，含 hljs 高亮 + 标题 id）
 const renderedContent = computed(() => {
   if (!post.value?.content) return ''
-  return marked(post.value.content) as string
+  return renderMd(post.value.content)
 })
 
 const formattedDate = computed(() => {
@@ -51,6 +52,11 @@ const readingTime = computed(() => {
   const text = post.value?.content ?? ''
   return Math.max(2, Math.round(text.length / 400))
 })
+
+// ── TOC & 代码复制（依赖 articleRef DOM）────────────────────────────────────
+const articleRef = ref<HTMLElement | null>(null)
+const { headings, activeId } = useToc(renderedContent, articleRef)
+useCodeCopy(articleRef)
 </script>
 
 <template>
@@ -91,70 +97,118 @@ const readingTime = computed(() => {
       </div>
     </div>
 
-    <!-- 正文 -->
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 pt-10 pb-20">
-      <article
-        class="prose prose-gray max-w-none dark:prose-invert prose-headings:scroll-mt-20 prose-img:rounded-xl prose-a:text-primary-600 dark:prose-a:text-primary-400"
-        v-html="renderedContent"
-      />
+    <!-- 正文区域：两栏布局（文章 + TOC 侧边栏） -->
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 pt-10 pb-20">
+      <div class="flex gap-10 items-start">
 
-      <!-- 底部标签 -->
-      <div v-if="post.tags && post.tags.length" class="mt-12 pt-8 border-t border-gray-100 dark:border-slate-800">
-        <p class="text-sm text-gray-500 dark:text-slate-400 mb-3 font-medium">相关标签</p>
-        <div class="flex flex-wrap gap-2">
-          <NuxtLink
-            v-for="tag in post.tags"
-            :key="tag.id"
-            :to="`/tags/${encodeURIComponent(tag.name)}`"
-            class="tag-pill-lg"
+        <!-- 左：文章正文 -->
+        <div class="flex-1 min-w-0">
+          <article
+            ref="articleRef"
+            class="prose prose-gray max-w-none dark:prose-invert prose-headings:scroll-mt-24 prose-img:rounded-xl prose-a:text-primary-600 dark:prose-a:text-primary-400"
+            v-html="renderedContent"
+          />
+
+          <!-- 底部标签 -->
+          <div v-if="post.tags && post.tags.length" class="mt-12 pt-8 border-t border-gray-100 dark:border-slate-800">
+            <p class="text-sm text-gray-500 dark:text-slate-400 mb-3 font-medium">相关标签</p>
+            <div class="flex flex-wrap gap-2">
+              <NuxtLink
+                v-for="tag in post.tags"
+                :key="tag.id"
+                :to="`/tags/${encodeURIComponent(tag.name)}`"
+                class="tag-pill-lg"
+              >
+                {{ tag.name }}
+              </NuxtLink>
+            </div>
+          </div>
+
+          <!-- 相关文章 -->
+          <div v-if="related && related.length" class="mt-12 pt-8 border-t border-gray-100 dark:border-slate-800">
+            <p class="text-sm font-medium text-slate-500 dark:text-slate-400 mb-4">相关文章</p>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <NuxtLink
+                v-for="rel in related"
+                :key="rel.id"
+                :to="`/blog/${rel.slug}`"
+                class="group flex flex-col gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-3.5 hover:border-slate-300 hover:shadow-sm transition-all dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+              >
+                <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-slate-100 line-clamp-2 leading-snug transition-colors">
+                  {{ rel.title }}
+                </span>
+                <div class="flex flex-wrap gap-1 mt-0.5">
+                  <span
+                    v-for="tag in (rel.tags ?? []).slice(0, 3)"
+                    :key="tag.id"
+                    class="inline-flex items-center rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400"
+                  >{{ tag.name }}</span>
+                </div>
+              </NuxtLink>
+            </div>
+          </div>
+
+          <!-- 上一篇 / 下一篇 -->
+          <div
+            v-if="adjacent && (adjacent.prev || adjacent.next)"
+            class="mt-8 pt-8 border-t border-gray-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3"
           >
-            {{ tag.name }}
-          </NuxtLink>
+            <NuxtLink
+              v-if="adjacent.prev"
+              :to="`/blog/${adjacent.prev.slug}`"
+              class="group flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:border-slate-300 hover:shadow-sm transition-all dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+            >
+              <span class="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
+                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+                </svg>
+                上一篇
+              </span>
+              <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-slate-100 line-clamp-2 transition-colors">
+                {{ adjacent.prev.title }}
+              </span>
+            </NuxtLink>
+            <div v-else />
+
+            <NuxtLink
+              v-if="adjacent.next"
+              :to="`/blog/${adjacent.next.slug}`"
+              class="group flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:border-slate-300 hover:shadow-sm transition-all text-right dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+            >
+              <span class="inline-flex items-center justify-end gap-1 text-xs text-slate-400 dark:text-slate-500">
+                下一篇
+                <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+                </svg>
+              </span>
+              <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-slate-100 line-clamp-2 transition-colors">
+                {{ adjacent.next.title }}
+              </span>
+            </NuxtLink>
+            <div v-else />
+          </div>
         </div>
-      </div>
 
-      <!-- 上一篇 / 下一篇 -->
-      <div
-        v-if="adjacent && (adjacent.prev || adjacent.next)"
-        class="mt-12 pt-8 border-t border-gray-100 dark:border-slate-800 grid grid-cols-1 sm:grid-cols-2 gap-3"
-      >
-        <!-- 上一篇（时间更早） -->
-        <NuxtLink
-          v-if="adjacent.prev"
-          :to="`/blog/${adjacent.prev.slug}`"
-          class="group flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:border-slate-300 hover:shadow-sm transition-all dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
+        <!-- 右：TOC 目录侧边栏（仅桌面端，且有标题时显示） -->
+        <aside
+          v-if="headings.length >= 2"
+          class="hidden xl:block w-52 shrink-0 sticky top-24 self-start"
         >
-          <span class="inline-flex items-center gap-1 text-xs text-slate-400 dark:text-slate-500">
-            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-            </svg>
-            上一篇
-          </span>
-          <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-slate-100 line-clamp-2 transition-colors">
-            {{ adjacent.prev.title }}
-          </span>
-        </NuxtLink>
-        <!-- 占位，保持 grid 对齐 -->
-        <div v-else />
+          <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 mb-3">目录</p>
+          <nav>
+            <a
+              v-for="h in headings"
+              :key="h.id"
+              :href="`#${h.id}`"
+              class="toc-link"
+              :class="[
+                h.level === 3 ? 'toc-h3' : '',
+                activeId === h.id ? 'active' : '',
+              ]"
+            >{{ h.text }}</a>
+          </nav>
+        </aside>
 
-        <!-- 下一篇（时间更新） -->
-        <NuxtLink
-          v-if="adjacent.next"
-          :to="`/blog/${adjacent.next.slug}`"
-          class="group flex flex-col gap-1 rounded-xl border border-slate-200 bg-white px-5 py-4 hover:border-slate-300 hover:shadow-sm transition-all text-right dark:border-slate-800 dark:bg-slate-900 dark:hover:border-slate-700"
-        >
-          <span class="inline-flex items-center justify-end gap-1 text-xs text-slate-400 dark:text-slate-500">
-            下一篇
-            <svg class="w-3.5 h-3.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
-            </svg>
-          </span>
-          <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 dark:text-slate-300 dark:group-hover:text-slate-100 line-clamp-2 transition-colors">
-            {{ adjacent.next.title }}
-          </span>
-        </NuxtLink>
-        <!-- 占位，保持 grid 对齐 -->
-        <div v-else />
       </div>
     </div>
   </div>

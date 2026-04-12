@@ -30,6 +30,10 @@ export const usePostsApi = () => ({
     apiFetch<{ prev: { title: string; slug: string } | null; next: { title: string; slug: string } | null }>(
       `/posts/slug/${slug}/adjacent`
     ),
+  getRelatedBySlug: (slug: string) =>
+    apiFetch<Array<{ id: number; title: string; slug: string; excerpt?: string; createdAt: string; tags: any[] }>>(
+      `/posts/slug/${slug}/related`
+    ),
   create: (data: any) => apiFetch<any>('/posts', { method: 'POST', body: JSON.stringify(data) }),
   update: (id: number, data: any) =>
     apiFetch<any>(`/posts/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

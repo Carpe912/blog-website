@@ -91,7 +91,18 @@ function setupMarked() {
       },
 
       // 代码块：hljs 高亮 + data-lang 属性（供 useCodeCopy 读取）
-      code({ text, lang }: { text: string; lang?: string }) {
+      // marked v9 同样存在两种调用约定：
+      //   新式：code(token)          token = { text, lang, escaped }
+      //   旧式：code(text, infostring, escaped) 位置参数
+      code(tokenOrText: any, infoArg?: string) {
+        let text: string, lang: string | undefined
+        if (tokenOrText !== null && typeof tokenOrText === 'object') {
+          text = String(tokenOrText.text ?? '')
+          lang = tokenOrText.lang
+        } else {
+          text = String(tokenOrText ?? '')
+          lang = infoArg
+        }
         const language = lang && hljs.getLanguage(lang) ? lang : 'plaintext'
         const highlighted = hljs.highlight(text, { language }).value
         return `<div class="code-block-wrapper" data-lang="${language}"><pre><code class="hljs language-${language}">${highlighted}</code></pre></div>\n`

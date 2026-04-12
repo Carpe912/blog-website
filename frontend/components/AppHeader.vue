@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const config = useRuntimeConfig()
 const route = useRoute()
+const router = useRouter()
 
 const isActive = (path: string) => route.path === path
 
@@ -10,6 +11,15 @@ const navLinks = [
   // { label: '关于', to: '/about' },
 ]
 
+// 与首页共享的搜索状态
+const searchQuery = useState('blog-search', () => '')
+
+function onSearch() {
+  if (route.path !== '/') {
+    router.push({ path: '/', query: searchQuery.value ? { q: searchQuery.value } : {} })
+  }
+}
+
 // 移动端菜单
 const mobileOpen = ref(false)
 watch(() => route.path, () => { mobileOpen.value = false })
@@ -17,7 +27,7 @@ watch(() => route.path, () => { mobileOpen.value = false })
 
 <template>
   <header class="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur-sm dark:border-slate-800 dark:bg-slate-950/95">
-    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-[3.25rem] flex items-center justify-between gap-4">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 h-[3.25rem] flex items-center justify-between gap-3">
 
       <!-- Logo / 站点名 -->
       <NuxtLink to="/" class="flex items-center gap-2.5 shrink-0 group">
@@ -30,9 +40,9 @@ watch(() => route.path, () => { mobileOpen.value = false })
         <span class="font-semibold text-slate-900 dark:text-slate-100 text-base tracking-tight">{{ config.public.siteName }}</span>
       </NuxtLink>
 
-      <div class="flex items-center gap-1 sm:gap-2">
+      <div class="flex items-center gap-1 sm:gap-2 flex-1 justify-end">
         <!-- 桌面端导航 -->
-        <nav class="hidden sm:flex items-center gap-1">
+        <nav class="hidden sm:flex items-center gap-1 shrink-0">
           <NuxtLink
             v-for="link in navLinks"
             :key="link.to"
@@ -45,6 +55,29 @@ watch(() => route.path, () => { mobileOpen.value = false })
             {{ link.label }}
           </NuxtLink>
         </nav>
+
+        <!-- 搜索框（桌面端） -->
+        <div class="hidden sm:flex relative w-44 xl:w-52 shrink-0">
+          <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 dark:text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="搜索文章…"
+            class="w-full pl-8 pr-7 py-1.5 text-sm rounded-md border border-slate-200 bg-slate-50 text-slate-700 placeholder-slate-400 outline-none focus:border-slate-400 focus:bg-white focus:ring-1 focus:ring-slate-200 transition dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder-slate-500 dark:focus:border-slate-500 dark:focus:bg-slate-800"
+            @keydown.enter="onSearch"
+          />
+          <button
+            v-if="searchQuery"
+            class="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            @click="searchQuery = ''"
+          >
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
 
         <ThemeToggle />
 
@@ -83,6 +116,29 @@ watch(() => route.path, () => { mobileOpen.value = false })
         >
           {{ link.label }}
         </NuxtLink>
+
+        <!-- 移动端搜索框 -->
+        <div class="relative pt-1">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 mt-0.5 w-4 h-4 text-slate-400 dark:text-slate-500 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <input
+            v-model="searchQuery"
+            type="search"
+            placeholder="搜索文章…"
+            class="w-full pl-9 pr-8 py-2.5 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 placeholder-slate-400 outline-none focus:border-slate-400 transition dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:placeholder-slate-500"
+            @keydown.enter="onSearch(); mobileOpen = false"
+          />
+          <button
+            v-if="searchQuery"
+            class="absolute right-3 top-1/2 -translate-y-1/2 mt-0.5 text-slate-400 hover:text-slate-600"
+            @click="searchQuery = ''"
+          >
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
       </div>
     </Transition>
   </header>

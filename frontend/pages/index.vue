@@ -67,9 +67,10 @@ const pagedPosts = computed(() => {
   return filteredPosts.value.slice(start, start + PAGE_SIZE)
 })
 
-function readingTime(post: { excerpt?: string; content?: string }) {
-  const len = (post.content ?? post.excerpt ?? '').length
-  return Math.max(1, Math.round(len / 400))
+function readingTime(post: { readingTime?: number; excerpt?: string }) {
+  // 优先使用后端已计算好的值，fallback 用摘要粗估
+  if (post.readingTime) return post.readingTime
+  return Math.max(1, Math.round((post.excerpt ?? '').length / 400))
 }
 
 function toggleTag(tag: string) {

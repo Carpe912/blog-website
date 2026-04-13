@@ -28,12 +28,13 @@ const POST_SELECT = {
   },
 } as const;
 
-/** 列表页不需要 content，减少传输量 */
+/** 列表页不需要 content，减少传输量；但需要 content 长度来计算阅读时间 */
 const POST_LIST_SELECT = {
   id: true,
   title: true,
   slug: true,
   excerpt: true,
+  content: true,
   cover: true,
   published: true,
   publishedAt: true,
@@ -378,9 +379,12 @@ export class PostsService {
 
   // ── 工具 ─────────────────────────────────────────────────────────────────
   private formatPost(post: any) {
-    const { tags, ...rest } = post;
+    const { tags, content, ...rest } = post;
+    // 中文约 400 字/分钟，最少 1 分钟
+    const readingTime = Math.max(1, Math.round((content ?? '').length / 400));
     return {
       ...rest,
+      readingTime,
       tags: (tags as any[]).map((pt: any) => pt.tag ?? pt),
     };
   }

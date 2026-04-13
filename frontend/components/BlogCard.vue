@@ -30,8 +30,8 @@ const formattedDate = computed(() => {
   })
 })
 
-// 预估阅读时间（中文约 400 字/分钟）
-const readingTime = computed(() => props.post.readingTime ?? 3)
+// 预估阅读时间（中文约 400 字/分钟），使用后端已计算好的值
+const readingTime = computed(() => props.post.readingTime ?? 1)
 
 // 封面渐变色（根据 index 循环）
 const gradients = [

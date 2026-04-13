@@ -75,7 +75,7 @@ function relatedDate(date: string) {
   <div v-if="post">
     <!-- 文章头部 -->
     <div class="border-b border-slate-200 bg-slate-50/90 dark:border-slate-800 dark:bg-slate-950">
-      <div class="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <!-- 返回首页 -->
         <NuxtLink to="/" class="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors mb-5">
           <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

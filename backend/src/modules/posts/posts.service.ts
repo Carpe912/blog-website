@@ -384,6 +384,7 @@ export class PostsService {
     const readingTime = Math.max(1, Math.round((content ?? '').length / 400));
     return {
       ...rest,
+      content,
       readingTime,
       tags: (tags as any[]).map((pt: any) => pt.tag ?? pt),
     };

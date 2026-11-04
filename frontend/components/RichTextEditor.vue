@@ -306,7 +306,7 @@ const wordCount = computed(() => {
         </button>
       </div>
 
-      <div class="ml-auto hidden sm:flex items-center gap-3 pr-1 text-xs text-slate-400 dark:text-slate-500 tabular-nums">
+      <div class="ml-auto hidden sm:flex items-center gap-3 pr-1 text-xs text-slate-400 dark:text-ink-400 tabular-nums">
         <span>{{ wordCount }} 字</span>
       </div>
     </div>
@@ -318,31 +318,31 @@ const wordCount = computed(() => {
 
 <style scoped>
 .rte-root {
-  @apply bg-white dark:bg-slate-900;
+  @apply bg-white dark:bg-ink-850;
 }
 
 /* ── 工具栏 ───────────────────────────────────────────── */
 .rte-toolbar {
   @apply sticky top-0 z-10 flex items-center gap-0.5 flex-wrap
          px-2 py-1.5 border-b border-slate-200/80 bg-white/90 backdrop-blur
-         dark:border-slate-800 dark:bg-slate-900/90;
+         dark:border-ink-700 dark:bg-ink-850/90;
 }
 .rte-group {
   @apply flex items-center;
 }
 .rte-sep {
-  @apply mx-1 h-4 w-px bg-slate-200 dark:bg-slate-700;
+  @apply mx-1 h-4 w-px bg-slate-200 dark:bg-ink-600;
 }
 .rte-btn {
   @apply flex h-8 w-8 items-center justify-center rounded-md text-slate-500
          transition-colors hover:bg-slate-100 hover:text-slate-900
-         dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100;
+         dark:text-ink-300 dark:hover:bg-ink-700 dark:hover:text-ink-50;
 }
 .rte-btn svg {
   @apply h-[17px] w-[17px];
 }
 .rte-btn.is-active {
-  @apply bg-slate-900 text-white hover:bg-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:hover:bg-slate-200;
+  @apply bg-slate-900 text-white hover:bg-slate-800 dark:bg-ink-50 dark:text-ink-850 dark:hover:bg-ink-100;
 }
 
 /* ── 编辑区 ───────────────────────────────────────────── */
@@ -352,9 +352,9 @@ const wordCount = computed(() => {
 
 :deep(.ProseMirror) {
   @apply min-h-[72vh] outline-none;
-  padding: 2rem 1.25rem 45vh;
-  font-size: 1.0625rem;
-  line-height: 1.85;
+  padding: 1.75rem 1.25rem 45vh;
+  font-size: 15px;
+  line-height: 1.78;
   color: theme('colors.slate.700');
 }
 :deep(.ProseMirror) > * + * {
@@ -363,13 +363,13 @@ const wordCount = computed(() => {
 
 /* 标题 */
 :deep(.ProseMirror h1) {
-  @apply mt-10 mb-4 text-[1.9rem] font-semibold tracking-tight text-slate-900 dark:text-slate-100;
+  @apply mt-9 mb-3 text-[1.6rem] font-semibold tracking-tight text-slate-900 dark:text-ink-50;
 }
 :deep(.ProseMirror h2) {
-  @apply mt-9 mb-3 text-[1.45rem] font-semibold tracking-tight text-slate-900 dark:text-slate-100;
+  @apply mt-8 mb-2.5 text-[1.32rem] font-semibold tracking-tight text-slate-900 dark:text-ink-50;
 }
 :deep(.ProseMirror h3) {
-  @apply mt-7 mb-2 text-[1.18rem] font-semibold text-slate-900 dark:text-slate-100;
+  @apply mt-6 mb-2 text-[1.1rem] font-semibold text-slate-900 dark:text-ink-50;
 }
 :deep(.ProseMirror h1:first-child),
 :deep(.ProseMirror h2:first-child),
@@ -379,10 +379,10 @@ const wordCount = computed(() => {
 
 /* 段落与行内 */
 :deep(.ProseMirror p) {
-  @apply text-slate-700 dark:text-slate-300;
+  @apply text-slate-700 dark:text-ink-200;
 }
 :deep(.ProseMirror strong) {
-  @apply font-semibold text-slate-900 dark:text-slate-100;
+  @apply font-semibold text-slate-900 dark:text-ink-50;
 }
 :deep(.ProseMirror a) {
   @apply text-indigo-600 underline decoration-indigo-200 underline-offset-2
@@ -390,7 +390,7 @@ const wordCount = computed(() => {
 }
 :deep(.ProseMirror code) {
   @apply rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[0.86em]
-         text-rose-600 dark:bg-slate-800 dark:text-rose-400;
+         text-slate-700 dark:bg-ink-700 dark:text-ink-100;
 }
 :deep(.ProseMirror mark) {
   @apply rounded bg-amber-100 px-0.5 text-inherit dark:bg-amber-500/25;
@@ -398,7 +398,7 @@ const wordCount = computed(() => {
 
 /* 引用 */
 :deep(.ProseMirror blockquote) {
-  @apply border-l-[3px] border-slate-300 pl-5 text-slate-600 dark:border-slate-600 dark:text-slate-400;
+  @apply border-l-[3px] border-slate-300 pl-5 text-slate-600 dark:border-ink-500 dark:text-ink-300;
 }
 
 /* 列表 */
@@ -426,17 +426,22 @@ const wordCount = computed(() => {
   @apply mt-1.5 shrink-0;
 }
 :deep(.ProseMirror ul[data-type='taskList'] input[type='checkbox']) {
-  @apply h-4 w-4 rounded border-slate-300 accent-slate-900 dark:accent-slate-200;
+  @apply h-4 w-4 rounded border-slate-300 accent-slate-900 dark:accent-ink-100;
 }
 
 /* 代码块 */
 :deep(.ProseMirror pre) {
-  @apply overflow-x-auto rounded-xl bg-slate-900 px-5 py-4 text-[0.85rem] leading-relaxed
-         text-slate-100 dark:bg-slate-950 dark:ring-1 dark:ring-slate-800;
+  @apply overflow-x-auto rounded-lg border border-slate-200 bg-slate-50 px-4 py-3
+         text-[13px] text-slate-800 dark:border-ink-700 dark:bg-ink-800 dark:text-ink-100;
   font-family: 'JetBrains Mono', 'Fira Code', Menlo, Consolas, monospace;
+  line-height: 1.7;
 }
 :deep(.ProseMirror pre code) {
   @apply bg-transparent p-0 text-inherit;
+}
+:deep(.ProseMirror pre code),
+:deep(.ProseMirror pre code *) {
+  background: transparent !important;
 }
 
 /* 表格 */
@@ -445,10 +450,10 @@ const wordCount = computed(() => {
 }
 :deep(.ProseMirror th),
 :deep(.ProseMirror td) {
-  @apply border border-slate-200 px-3 py-2 align-top dark:border-slate-700;
+  @apply border border-slate-200 px-3 py-2 align-top dark:border-ink-600;
 }
 :deep(.ProseMirror th) {
-  @apply bg-slate-50 font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-200;
+  @apply bg-slate-50 font-semibold text-slate-700 dark:bg-ink-700 dark:text-ink-100;
 }
 
 /* 图片与分割线 */
@@ -456,13 +461,13 @@ const wordCount = computed(() => {
   @apply rounded-xl;
 }
 :deep(.ProseMirror hr) {
-  @apply my-10 border-slate-200 dark:border-slate-700;
+  @apply my-10 border-slate-200 dark:border-ink-600;
 }
 
 /* 占位符 */
 :deep(.ProseMirror p.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);
-  @apply pointer-events-none float-left h-0 text-slate-300 dark:text-slate-600;
+  @apply pointer-events-none float-left h-0 text-slate-300 dark:text-ink-500;
 }
 
 /* 选中文字的浮动菜单底色 */

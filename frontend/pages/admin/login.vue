@@ -1,15 +1,15 @@
 <template>
-  <div class="flex min-h-screen flex-col bg-white dark:bg-slate-950">
+  <div class="flex min-h-screen flex-col bg-white dark:bg-ink-900">
     <!-- 顶部品牌 -->
     <header class="flex h-16 items-center px-8">
       <NuxtLink to="/" class="flex items-center gap-2.5">
         <span class="flex h-6 w-6 items-center justify-center rounded-md bg-slate-900 dark:bg-white">
-          <svg class="h-3 w-3 text-white dark:text-slate-900" viewBox="0 0 24 24" fill="none"
+          <svg class="h-3 w-3 text-white dark:text-ink-850" viewBox="0 0 24 24" fill="none"
             stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
             <path d="M4 19.5V6a2 2 0 012-2h12a2 2 0 012 2v13.5M8 8h8M8 12h5" />
           </svg>
         </span>
-        <span class="text-[13px] font-semibold text-slate-900 dark:text-slate-100">
+        <span class="text-[13px] font-semibold text-slate-900 dark:text-ink-50">
           管理后台
         </span>
       </NuxtLink>
@@ -18,10 +18,10 @@
     <!-- 表单 -->
     <main class="flex flex-1 items-center justify-center px-6 pb-24">
       <div class="w-full max-w-[19rem]">
-        <h1 class="text-[1.5rem] font-semibold tracking-tight text-slate-900 dark:text-slate-50">
+        <h1 class="text-[1.5rem] font-semibold tracking-tight text-slate-900 dark:text-ink-50">
           登录
         </h1>
-        <p class="mt-2 text-[13px] text-slate-400 dark:text-slate-500">
+        <p class="mt-2 text-[13px] text-slate-400 dark:text-ink-400">
           输入管理密码以继续
         </p>
 
@@ -38,8 +38,8 @@
               class="h-10 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-[14px]
                      text-slate-800 outline-none transition placeholder:text-slate-300
                      focus:border-slate-400 focus:ring-2 focus:ring-slate-100
-                     dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100
-                     dark:placeholder:text-slate-600 dark:focus:border-slate-500 dark:focus:ring-slate-800"
+                     dark:border-ink-600 dark:bg-ink-850 dark:text-ink-50
+                     dark:placeholder:text-ink-500 dark:focus:border-ink-400 dark:focus:ring-ink-700"
             />
           </div>
 
@@ -58,7 +58,7 @@
             class="flex h-10 w-full items-center justify-center gap-2 rounded-lg bg-slate-900
                    text-[13.5px] font-medium text-white transition-all hover:bg-slate-800
                    active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-35
-                   dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200"
+                   dark:bg-white dark:text-ink-850 dark:hover:bg-ink-100"
           >
             <svg v-if="loading" class="h-3.5 w-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
               <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" />
@@ -71,7 +71,7 @@
         <NuxtLink
           to="/"
           class="mt-8 inline-flex items-center gap-1 text-[12.5px] text-slate-400 transition-colors
-                 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300"
+                 hover:text-slate-700 dark:text-ink-400 dark:hover:text-ink-200"
         >
           <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round"><path d="M15 19l-7-7 7-7" /></svg>

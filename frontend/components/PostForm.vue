@@ -75,17 +75,17 @@ const router = useRouter()
 </script>
 
 <template>
-  <div class="min-h-screen bg-white dark:bg-slate-900">
+  <div class="min-h-screen bg-white dark:bg-ink-850">
     <!-- 顶部操作栏 -->
     <header
       class="sticky top-0 z-30 border-b border-slate-200/70 bg-white/85 backdrop-blur-sm
-             dark:border-slate-800 dark:bg-slate-900/85"
+             dark:border-ink-700 dark:bg-ink-850/85"
     >
       <div class="mx-auto flex h-14 max-w-5xl items-center gap-3 px-5">
         <button
           type="button"
           class="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 transition-colors
-                 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
+                 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-ink-700 dark:hover:text-ink-100"
           aria-label="返回文章列表"
           @click="router.push('/admin/posts')"
         >
@@ -96,21 +96,21 @@ const router = useRouter()
         </button>
 
         <div class="flex min-w-0 items-center gap-2 text-sm">
-          <span class="truncate font-medium text-slate-800 dark:text-slate-200">
+          <span class="truncate font-medium text-slate-800 dark:text-ink-100">
             {{ mode === 'edit' ? '编辑文章' : '新建文章' }}
           </span>
           <span
             class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium"
             :class="form.published
               ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
-              : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'"
+              : 'bg-slate-100 text-slate-500 dark:bg-ink-700 dark:text-ink-300'"
           >
             {{ form.published ? '已发布' : '草稿' }}
           </span>
         </div>
 
         <div class="ml-auto flex items-center gap-2">
-          <span class="mr-1 hidden text-xs text-slate-400 dark:text-slate-500 sm:inline tabular-nums">
+          <span class="mr-1 hidden text-xs text-slate-400 dark:text-ink-400 sm:inline tabular-nums">
             {{ charCount }} 字 · 约 {{ readingMinutes }} 分钟
           </span>
 
@@ -147,16 +147,16 @@ const router = useRouter()
         v-model="form.title"
         rows="1"
         placeholder="无标题"
-        class="w-full resize-none border-0 bg-transparent p-0 text-[2.15rem] font-semibold leading-[1.25]
+        class="w-full resize-none border-0 bg-transparent p-0 text-[1.7rem] font-semibold leading-[1.3]
                tracking-tight text-slate-900 outline-none placeholder:text-slate-300
-               dark:text-slate-50 dark:placeholder:text-slate-600"
+               dark:text-ink-50 dark:placeholder:text-ink-500"
         @keydown.enter.prevent="($event.target as HTMLElement)?.blur()"
       />
 
       <!-- 辅助信息 -->
-      <div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 dark:text-slate-500">
+      <div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400 dark:text-ink-400">
         <span>链接与摘要将自动生成</span>
-        <span class="text-slate-300 dark:text-slate-700">·</span>
+        <span class="text-slate-300 dark:text-ink-600">·</span>
         <span>支持 Markdown 快捷输入</span>
       </div>
 
@@ -168,7 +168,7 @@ const router = useRouter()
             placeholder="从这里开始写正文，输入 / 唤起更多格式…"
           />
           <template #fallback>
-            <div class="min-h-[70vh] animate-pulse rounded-xl bg-slate-50 dark:bg-slate-800/40" />
+            <div class="min-h-[70vh] animate-pulse rounded-xl bg-slate-50 dark:bg-ink-700/40" />
           </template>
         </ClientOnly>
       </div>
@@ -185,7 +185,7 @@ const router = useRouter()
         v-if="isDirty && !loading"
         class="fixed bottom-5 left-1/2 z-20 -translate-x-1/2 rounded-full border border-slate-200
                bg-white/95 px-4 py-2 text-xs text-slate-500 shadow-sm backdrop-blur
-               dark:border-slate-700 dark:bg-slate-800/95 dark:text-slate-400"
+               dark:border-ink-600 dark:bg-ink-700/95 dark:text-ink-300"
       >
         有未保存的修改
       </div>
@@ -198,12 +198,12 @@ const router = useRouter()
   @apply inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-[13px] font-medium
          text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900
          disabled:cursor-not-allowed disabled:opacity-40
-         dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-white;
+         dark:text-ink-200 dark:hover:bg-ink-700 dark:hover:text-ink-50;
 }
 .btn-solid {
   @apply inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-4 py-1.5 text-[13px] font-medium
          text-white transition-all hover:bg-slate-800 active:scale-[0.98]
          disabled:cursor-not-allowed disabled:opacity-40
-         dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200;
+         dark:bg-white dark:text-ink-850 dark:hover:bg-ink-100;
 }
 </style>

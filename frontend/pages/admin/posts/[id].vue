@@ -21,7 +21,7 @@
       <div
         v-if="savedTip"
         class="fixed bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2
-               text-xs text-white shadow-lg dark:bg-white dark:text-slate-900"
+               text-xs text-white shadow-lg dark:bg-white dark:text-ink-850"
       >
         已保存
       </div>

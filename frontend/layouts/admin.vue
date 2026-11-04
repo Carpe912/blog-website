@@ -28,22 +28,22 @@ function logout() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-white dark:bg-slate-950">
+  <div class="min-h-screen bg-white dark:bg-ink-900">
     <!-- 侧边栏 -->
     <aside
       class="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-slate-200/80
-             bg-white dark:border-slate-800 dark:bg-slate-900"
+             bg-white dark:border-ink-700 dark:bg-ink-850"
     >
       <!-- 品牌 -->
       <div class="flex h-16 items-center px-6">
         <NuxtLink to="/admin" class="flex items-center gap-2.5">
           <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 dark:bg-white">
-            <svg class="h-3.5 w-3.5 text-white dark:text-slate-900" viewBox="0 0 24 24" fill="none"
+            <svg class="h-3.5 w-3.5 text-white dark:text-ink-850" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M4 19.5V6a2 2 0 012-2h12a2 2 0 012 2v13.5M8 8h8M8 12h5" />
             </svg>
           </span>
-          <span class="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          <span class="text-sm font-semibold tracking-tight text-slate-900 dark:text-ink-50">
             {{ config.public.siteName }}
           </span>
         </NuxtLink>
@@ -57,8 +57,8 @@ function logout() {
           :to="item.to"
           class="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors"
           :class="isActive(item.to)
-            ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white'
-            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100'"
+            ? 'bg-slate-100 text-slate-900 dark:bg-ink-700 dark:text-ink-50'
+            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-ink-300 dark:hover:bg-ink-700/60 dark:hover:text-ink-50'"
         >
           <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
             stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
@@ -69,13 +69,13 @@ function logout() {
       </nav>
 
       <!-- 底部 -->
-      <div class="border-t border-slate-100 p-3 dark:border-slate-800">
+      <div class="border-t border-slate-100 p-3 dark:border-ink-700">
         <NuxtLink
           to="/"
           target="_blank"
           class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-slate-500
                  transition-colors hover:bg-slate-50 hover:text-slate-900
-                 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
+                 dark:text-ink-300 dark:hover:bg-ink-700/60 dark:hover:text-ink-50"
         >
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
             stroke-linecap="round" stroke-linejoin="round">
@@ -87,7 +87,7 @@ function logout() {
           type="button"
           class="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-slate-500
                  transition-colors hover:bg-slate-50 hover:text-red-600
-                 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-red-400"
+                 dark:text-ink-300 dark:hover:bg-ink-700/60 dark:hover:text-red-400"
           @click="logout"
         >
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"

@@ -22,9 +22,4 @@ export class QueryPostDto {
   @Transform(({ value }) => value === 'true')
   @IsBoolean()
   published?: boolean;
-
-  @IsOptional()
-  @Transform(({ value }) => parseInt(value))
-  @IsInt()
-  tagId?: number;
 }

@@ -1,88 +1,166 @@
 <template>
   <div>
-    <div class="flex items-center justify-between mb-6">
-      <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">文章管理</h2>
-      <NuxtLink to="/admin/posts/new" class="btn-primary text-sm">+ 新建文章</NuxtLink>
+    <!-- 页头 -->
+    <div class="flex items-end justify-between gap-6 pb-6">
+      <div>
+        <h1 class="text-[1.35rem] font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+          文章
+        </h1>
+        <p class="mt-1 text-[13px] text-slate-400 dark:text-slate-500">
+          共 {{ meta.total }} 篇 · {{ publishedCount }} 篇已发布
+        </p>
+      </div>
+
+      <NuxtLink to="/admin/posts/new" class="btn-solid">
+        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"
+          stroke-linecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        新建文章
+      </NuxtLink>
     </div>
 
-    <!-- Filters -->
-    <div class="flex gap-3 mb-5">
-      <input
-        v-model="search"
-        @input="debouncedLoad"
-        type="text"
-        placeholder="搜索文章..."
-        class="px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-primary-500 w-56"
-      />
-      <select
-        v-model="publishedFilter"
-        @change="loadPosts"
-        class="px-3 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-sm text-gray-800 dark:text-gray-100"
+    <!-- 筛选 -->
+    <div class="flex flex-wrap items-center gap-3 border-y border-slate-200/80 py-3 dark:border-slate-800">
+      <div class="relative">
+        <svg class="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400"
+          viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+        </svg>
+        <input
+          v-model="search"
+          type="search"
+          placeholder="搜索标题或正文"
+          class="h-8 w-64 rounded-md border border-slate-200 bg-white pl-8 pr-3 text-[13px]
+                 text-slate-700 outline-none transition placeholder:text-slate-400
+                 focus:border-slate-400 focus:ring-2 focus:ring-slate-100
+                 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:focus:border-slate-500 dark:focus:ring-slate-800"
+          @input="debouncedLoad"
+        />
+      </div>
+
+      <div class="flex items-center gap-1">
+        <button
+          v-for="tab in tabs"
+          :key="tab.value"
+          type="button"
+          class="rounded-md px-2.5 py-1.5 text-[13px] font-medium transition-colors"
+          :class="publishedFilter === tab.value
+            ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900'
+            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200'"
+          @click="publishedFilter = tab.value; page = 1; loadPosts()"
+        >
+          {{ tab.label }}
+        </button>
+      </div>
+    </div>
+
+    <!-- 列表 -->
+    <div class="mt-1">
+      <div
+        v-if="loading"
+        class="divide-y divide-slate-100 dark:divide-slate-800"
       >
-        <option value="">全部状态</option>
-        <option value="true">已发布</option>
-        <option value="false">草稿</option>
-      </select>
-    </div>
+        <div v-for="i in 4" :key="i" class="flex animate-pulse items-center gap-4 py-5">
+          <div class="h-4 w-1/2 rounded bg-slate-100 dark:bg-slate-800" />
+          <div class="ml-auto h-3 w-20 rounded bg-slate-100 dark:bg-slate-800" />
+        </div>
+      </div>
 
-    <!-- Table -->
-    <div class="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-gray-50 dark:bg-gray-700/50 border-b border-gray-100 dark:border-gray-700">
-          <tr>
-            <th class="text-left px-5 py-3 text-gray-500 dark:text-gray-400 font-medium">标题</th>
-            <th class="text-left px-5 py-3 text-gray-500 dark:text-gray-400 font-medium w-28">状态</th>
-            <th class="text-left px-5 py-3 text-gray-500 dark:text-gray-400 font-medium w-36">创建时间</th>
-            <th class="px-5 py-3 w-28"></th>
-          </tr>
-        </thead>
-        <tbody class="divide-y divide-gray-100 dark:divide-gray-700">
-          <tr v-if="loading" class="text-center">
-            <td colspan="4" class="py-10 text-gray-400">加载中...</td>
-          </tr>
-          <tr v-else-if="!posts.length" class="text-center">
-            <td colspan="4" class="py-10 text-gray-400">暂无文章</td>
-          </tr>
-          <tr
-            v-for="post in posts"
-            :key="post.id"
-            class="hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors"
-          >
-            <td class="px-5 py-3">
-              <div class="font-medium text-gray-800 dark:text-gray-100 truncate max-w-xs">{{ post.title }}</div>
-              <div class="text-xs text-gray-400 mt-0.5">{{ post.slug }}</div>
-            </td>
-            <td class="px-5 py-3">
+      <div
+        v-else-if="!posts.length"
+        class="flex flex-col items-center justify-center py-24 text-center"
+      >
+        <div class="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-slate-50 dark:bg-slate-800">
+          <svg class="h-5 w-5 text-slate-300 dark:text-slate-600" viewBox="0 0 24 24" fill="none"
+            stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 4h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1zM8 9h8M8 13h5" />
+          </svg>
+        </div>
+        <p class="text-sm font-medium text-slate-500 dark:text-slate-400">
+          {{ search || publishedFilter ? '没有匹配的文章' : '还没有文章' }}
+        </p>
+        <p class="mt-1 text-[13px] text-slate-400 dark:text-slate-500">
+          {{ search || publishedFilter ? '换个关键词或筛选条件试试' : '写下第一篇，从这里开始' }}
+        </p>
+        <NuxtLink v-if="!search && !publishedFilter" to="/admin/posts/new" class="btn-ghost mt-5">
+          新建文章 →
+        </NuxtLink>
+      </div>
+
+      <ul v-else class="divide-y divide-slate-100 dark:divide-slate-800">
+        <li
+          v-for="post in posts"
+          :key="post.id"
+          class="group relative flex items-start gap-4 py-5 transition-colors"
+        >
+          <div class="min-w-0 flex-1">
+            <NuxtLink :to="`/admin/posts/${post.id}`" class="block">
+              <h2 class="truncate text-[15px] font-medium leading-snug text-slate-800 transition-colors
+                         group-hover:text-slate-950 dark:text-slate-200 dark:group-hover:text-white">
+                {{ post.title }}
+              </h2>
+              <p v-if="post.excerpt" class="mt-1 line-clamp-1 text-[13px] leading-relaxed text-slate-400 dark:text-slate-500">
+                {{ post.excerpt }}
+              </p>
+            </NuxtLink>
+
+            <div class="mt-2 flex items-center gap-2.5 text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
               <span
+                class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-medium"
                 :class="post.published
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
-                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'"
-                class="text-xs px-2 py-0.5 rounded-full font-medium"
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400'
+                  : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'"
               >
                 {{ post.published ? '已发布' : '草稿' }}
               </span>
-            </td>
-            <td class="px-5 py-3 text-gray-400 text-xs">{{ formatDate(post.createdAt) }}</td>
-            <td class="px-5 py-3">
-              <div class="flex gap-2 justify-end">
-                <NuxtLink :to="`/admin/posts/${post.id}`" class="text-primary-600 hover:underline text-xs">编辑</NuxtLink>
-                <button @click="deletePost(post)" class="text-red-500 hover:underline text-xs">删除</button>
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              <span>{{ formatDate(post.createdAt) }}</span>
+              <span class="text-slate-300 dark:text-slate-700">·</span>
+              <span>{{ post.readingTime ?? 1 }} 分钟</span>
+            </div>
+          </div>
+
+          <!-- 行内操作（悬停显示） -->
+          <div class="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+            <NuxtLink
+              :to="`/blog/${post.slug}`"
+              target="_blank"
+              class="action-btn"
+              title="预览"
+            >
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+            </NuxtLink>
+            <NuxtLink :to="`/admin/posts/${post.id}`" class="action-btn" title="编辑">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 20h9M16.5 3.5a2.1 2.1 0 013 3L7 19l-4 1 1-4 12.5-12.5z" />
+              </svg>
+            </NuxtLink>
+            <button type="button" class="action-btn hover:!text-red-600" title="删除" @click="deletePost(post)">
+              <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M19 6l-1 14a1 1 0 01-1 1H7a1 1 0 01-1-1L5 6" />
+              </svg>
+            </button>
+          </div>
+        </li>
+      </ul>
     </div>
 
-    <!-- Pagination -->
-    <div v-if="meta.totalPages > 1" class="flex justify-center gap-2 mt-5">
-      <button
-        v-for="p in meta.totalPages"
-        :key="p"
-        @click="page = p; loadPosts()"
-        :class="p === page ? 'page-btn bg-primary-600 text-white' : 'page-btn'"
-      >
-        {{ p }}
+    <!-- 分页 -->
+    <div v-if="meta.totalPages > 1" class="mt-8 flex items-center justify-center gap-1.5">
+      <button class="page-btn" :disabled="page === 1" @click="page--; loadPosts()">
+        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"><path d="M15 19l-7-7 7-7" /></svg>
+      </button>
+      <span class="px-2 text-xs text-slate-400 tabular-nums">{{ page }} / {{ meta.totalPages }}</span>
+      <button class="page-btn" :disabled="page === meta.totalPages" @click="page++; loadPosts()">
+        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
       </button>
     </div>
   </div>
@@ -94,10 +172,17 @@ definePageMeta({ layout: 'admin', middleware: 'admin' })
 const postsApi = usePostsApi()
 const posts = ref<any[]>([])
 const meta = ref({ total: 0, page: 1, limit: 10, totalPages: 1 })
-const loading = ref(false)
+const loading = ref(true)
 const search = ref('')
 const publishedFilter = ref('')
 const page = ref(1)
+const publishedCount = ref(0)
+
+const tabs = [
+  { label: '全部', value: '' },
+  { label: '已发布', value: 'true' },
+  { label: '草稿', value: 'false' },
+]
 
 let debounceTimer: ReturnType<typeof setTimeout>
 
@@ -115,20 +200,51 @@ async function loadPosts() {
   }
 }
 
+async function loadPublishedCount() {
+  const res = await postsApi.list({ published: 'true', limit: 1 })
+  publishedCount.value = res.meta?.total ?? 0
+}
+
 function debouncedLoad() {
   clearTimeout(debounceTimer)
-  debounceTimer = setTimeout(() => { page.value = 1; loadPosts() }, 400)
+  debounceTimer = setTimeout(() => {
+    page.value = 1
+    loadPosts()
+  }, 350)
 }
 
 async function deletePost(post: any) {
-  if (!confirm(`确认删除文章「${post.title}」？`)) return
+  if (!confirm(`确认删除「${post.title}」？`)) return
   await postsApi.remove(post.id)
-  loadPosts()
+  await Promise.all([loadPosts(), loadPublishedCount()])
 }
 
 function formatDate(d: string) {
-  return new Date(d).toLocaleDateString('zh-CN')
+  return new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
-loadPosts()
+await Promise.all([loadPosts(), loadPublishedCount()])
 </script>
+
+<style scoped>
+.btn-solid {
+  @apply inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 py-2 text-[13px] font-medium
+         text-white transition-all hover:bg-slate-800 active:scale-[0.98]
+         dark:bg-white dark:text-slate-900 dark:hover:bg-slate-200;
+}
+.btn-ghost {
+  @apply inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3.5 py-2 text-[13px]
+         font-medium text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50
+         dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800;
+}
+.action-btn {
+  @apply flex h-7 w-7 items-center justify-center rounded-md text-slate-400 transition-colors
+         hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200;
+}
+.page-btn {
+  @apply flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500
+         transition-colors hover:border-slate-300 hover:text-slate-900
+         disabled:cursor-not-allowed disabled:opacity-35
+         dark:border-slate-700 dark:text-slate-400 dark:hover:border-slate-600 dark:hover:text-slate-200;
+}
+</style>

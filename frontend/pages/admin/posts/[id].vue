@@ -1,44 +1,57 @@
 <template>
-  <div class="max-w-3xl">
-    <div class="flex items-center gap-3 mb-6">
-      <NuxtLink to="/admin/posts" class="text-gray-400 hover:text-gray-600 text-sm">← 返回列表</NuxtLink>
-      <h2 class="text-2xl font-bold text-gray-800 dark:text-gray-100">编辑文章</h2>
-    </div>
-    <div v-if="pending" class="text-gray-400 py-10 text-center">加载中...</div>
+  <div>
     <PostForm
-      v-else
+      v-if="post"
+      mode="edit"
       :initial="post"
-      :tags="allTags"
       :loading="saving"
       @submit="handleUpdate"
     />
+    <div v-else class="flex min-h-screen items-center justify-center text-sm text-slate-400">
+      加载中…
+    </div>
+
+    <!-- 保存提示 -->
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="translate-y-2 opacity-0"
+      leave-active-class="transition duration-150 ease-in"
+      leave-to-class="translate-y-2 opacity-0"
+    >
+      <div
+        v-if="savedTip"
+        class="fixed bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-full bg-slate-900 px-4 py-2
+               text-xs text-white shadow-lg dark:bg-white dark:text-slate-900"
+      >
+        已保存
+      </div>
+    </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'admin', middleware: 'admin' })
+definePageMeta({ layout: false, middleware: 'admin' })
 
 const route = useRoute()
-const router = useRouter()
 const postsApi = usePostsApi()
-const tagsApi = useTagsApi()
 const saving = ref(false)
+const savedTip = ref(false)
 const post = ref<any>(null)
-const allTags = ref<any[]>([])
-const pending = ref(true)
 
 const id = Number(route.params.id)
 
-const [postRes, tagsRes] = await Promise.all([postsApi.get(id), tagsApi.list()])
-post.value = postRes
-allTags.value = tagsRes
-pending.value = false
+try {
+  post.value = await postsApi.get(id)
+} catch {
+  await navigateTo('/admin/posts')
+}
 
 async function handleUpdate(formData: any) {
   saving.value = true
   try {
-    await postsApi.update(id, formData)
-    router.push('/admin/posts')
+    post.value = await postsApi.update(id, formData)
+    savedTip.value = true
+    setTimeout(() => (savedTip.value = false), 1600)
   } catch (e: any) {
     alert(e?.data?.message || '更新失败')
   } finally {

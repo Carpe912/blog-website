@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
-import { ClaudeService } from './claude.service';
+import { AiService } from './ai.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostDto } from './dto/query-post.dto';
@@ -8,7 +8,6 @@ import { QueryPostDto } from './dto/query-post.dto';
 /**
  * 通用字段选择器 —— 不含 aiKeywords
  * 迁移前（列不存在）和迁移后均可正常使用。
- * Prisma 只生成 SELECT 了这些字段的 SQL，不会碰 aiKeywords 列。
  */
 const POST_SELECT = {
   id: true,
@@ -16,46 +15,24 @@ const POST_SELECT = {
   slug: true,
   excerpt: true,
   content: true,
-  cover: true,
   published: true,
   publishedAt: true,
   createdAt: true,
   updatedAt: true,
-  tags: {
-    select: {
-      tag: { select: { id: true, name: true, slug: true } },
-    },
-  },
 } as const;
 
-/** 列表页不需要 content，减少传输量；但需要 content 长度来计算阅读时间 */
-const POST_LIST_SELECT = {
-  id: true,
-  title: true,
-  slug: true,
-  excerpt: true,
-  content: true,
-  cover: true,
-  published: true,
-  publishedAt: true,
-  createdAt: true,
-  updatedAt: true,
-  tags: {
-    select: {
-      tag: { select: { id: true, name: true, slug: true } },
-    },
-  },
-} as const;
+/** 列表页同样返回 content，前端据此计算阅读时间 */
+const POST_LIST_SELECT = POST_SELECT;
 
 @Injectable()
 export class PostsService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly claude: ClaudeService,
+    private readonly ai: AiService,
   ) {}
 
   async findAll(query: QueryPostDto) {
-    const { page = 1, limit = 10, search, published, tagId } = query;
+    const { page = 1, limit = 10, search, published } = query;
     const skip = (page - 1) * limit;
 
     const where: any = {};
@@ -67,7 +44,6 @@ export class PostsService {
       ];
     }
     if (published !== undefined) where.published = published;
-    if (tagId) where.tags = { some: { tagId } };
 
     const [total, items] = await Promise.all([
       this.prisma.post.count({ where }),
@@ -81,7 +57,7 @@ export class PostsService {
     ]);
 
     return {
-      data: items.map(this.formatPost),
+      data: items.map((item) => this.formatPost(item)),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -105,81 +81,83 @@ export class PostsService {
   }
 
   async create(dto: CreatePostDto) {
-    const { tagIds, ...postData } = dto;
-
-    const existing = await this.prisma.post.findUnique({ where: { slug: dto.slug } });
-    if (existing) throw new ConflictException('slug 已存在');
-
-    const publishedAt = postData.published ? new Date() : null;
+    const slug = await this.resolveSlug(dto.slug);
+    const excerpt = await this.resolveExcerpt(dto.title, dto.content, dto.excerpt);
+    const published = dto.published ?? false;
 
     const post = await this.prisma.post.create({
       data: {
-        ...postData,
-        publishedAt,
-        tags: tagIds?.length
-          ? { create: tagIds.map((tagId) => ({ tag: { connect: { id: tagId } } })) }
-          : undefined,
+        title: dto.title,
+        slug,
+        content: dto.content,
+        excerpt,
+        published,
+        publishedAt: published ? new Date() : null,
       },
       select: POST_SELECT,
     });
 
-    // 异步提取 AI 关键词（不阻塞响应，迁移前静默跳过）
-    if (postData.published) {
-      this._asyncRefreshKeywords(
-        (post as any).id,
-        (post as any).title,
-        dto.content,
-      );
+    // 异步提取 AI 关键词（不阻塞响应）
+    if (published) {
+      this._asyncRefreshKeywords(post.id, post.title, dto.content);
     }
 
     return this.formatPost(post);
   }
 
   async update(id: number, dto: UpdatePostDto) {
-    const current = await this.findOne(id);
-    const { tagIds, published, ...postData } = dto;
+    const current: any = await this.findOne(id);
+    const { published, excerpt, slug, ...postData } = dto;
 
-    if (dto.slug) {
+    if (slug && slug !== current.slug) {
       const conflict = await this.prisma.post.findFirst({
-        where: { slug: dto.slug, NOT: { id } },
+        where: { slug, NOT: { id } },
         select: { id: true },
       });
       if (conflict) throw new ConflictException('slug 已存在');
     }
 
+    // 摘要：显式传入优先；否则在正文变化或原摘要为空时重新生成
+    const contentChanged =
+      postData.content !== undefined && postData.content !== current.content;
+    let nextExcerpt = current.excerpt ?? null;
+
+    if (excerpt !== undefined) {
+      nextExcerpt = excerpt?.trim() || null;
+    } else if (contentChanged || !nextExcerpt) {
+      nextExcerpt = await this.resolveExcerpt(
+        postData.title ?? current.title,
+        postData.content ?? current.content,
+      );
+    }
+
     const publishedAt =
       published === true
-        ? new Date()
+        ? current.publishedAt ?? new Date()
         : published === false
-        ? null
-        : undefined;
+          ? null
+          : undefined;
 
     await this.prisma.post.update({
       where: { id },
       data: {
         ...postData,
+        ...(slug ? { slug } : {}),
+        excerpt: nextExcerpt,
         ...(published !== undefined ? { published } : {}),
         ...(publishedAt !== undefined ? { publishedAt } : {}),
-        ...(tagIds !== undefined
-          ? {
-              tags: {
-                deleteMany: {},
-                create: tagIds.map((tagId) => ({ tag: { connect: { id: tagId } } })),
-              },
-            }
-          : {}),
       },
     });
 
-    const updated = await this.findOne(id);
+    const updated: any = await this.findOne(id);
 
     // 内容/标题变化或首次发布时重新提取关键词
     const needsRefresh =
-      (published === true && !(current as any).published) ||
-      (dto.title && dto.title !== (current as any).title) ||
-      (dto.content && dto.content !== (current as any).content);
+      (published === true && !current.published) ||
+      (postData.title && postData.title !== current.title) ||
+      contentChanged;
 
-    if (needsRefresh && (updated as any).published) {
+    if (needsRefresh && updated.published) {
       const raw = await this.prisma.post.findUnique({
         where: { id },
         select: { title: true, content: true },
@@ -203,9 +181,8 @@ export class PostsService {
     });
     if (!post) throw new NotFoundException(`文章 #${id} 不存在`);
 
-    const keywords = await this.claude.extractKeywords(post.title, post.content);
+    const keywords = await this.ai.extractKeywords(post.title, post.content);
 
-    // 若 aiKeywords 列不存在（未迁移），这里会抛出 —— 返回友好提示
     try {
       await (this.prisma.post as any).update({
         where: { id },
@@ -242,81 +219,42 @@ export class PostsService {
     return { prev: prev ?? null, next: next ?? null };
   }
 
-  // ── 相关文章 ──────────────────────────────────────────────────────────────
+  // ── 相关文章（基于 AI 关键词）─────────────────────────────────────────────
   async findRelatedBySlug(slug: string, limit = 4) {
     const post = await this.prisma.post.findUnique({
       where: { slug },
-      select: { id: true, tags: { select: { tagId: true } } },
+      select: { id: true },
     });
     if (!post) throw new NotFoundException(`文章 "${slug}" 不存在`);
 
-    const tagIds = post.tags.map((pt) => pt.tagId);
-
-    // 优先尝试 AI 关键词匹配（需要迁移后才可用）
-    try {
-      return await this._relatedByAiKeywords(post.id, slug, tagIds, limit);
-    } catch {
-      // 迁移前降级：仅用标签
-      return await this._relatedByTagsOnly(post.id, tagIds, limit);
-    }
-  }
-
-  // ── 私有：基于 AI 关键词的相关文章（需要 aiKeywords 列） ─────────────────
-  private async _relatedByAiKeywords(
-    postId: number,
-    slug: string,
-    tagIds: number[],
-    limit: number,
-  ) {
-    // 读取当前文章的 AI 关键词（列不存在时这里会抛出）
-    const kw = await (this.prisma.post as any).findUnique({
-      where: { slug },
-      select: { aiKeywords: true },
-    });
+    // 读取当前文章的 AI 关键词（列不存在时降级为空）
+    const kw = await (this.prisma.post as any)
+      .findUnique({ where: { slug }, select: { aiKeywords: true } })
+      .catch(() => null);
     const aiKeywords: string[] = kw?.aiKeywords ?? [];
 
-    const orConditions: any[] = [];
-    if (aiKeywords.length > 0) orConditions.push({ aiKeywords: { hasSome: aiKeywords } });
-    if (tagIds.length > 0) orConditions.push({ tags: { some: { tagId: { in: tagIds } } } });
+    let candidates: any[] = [];
 
-    // 候选（aiKeywords WHERE 失败时会被上层 catch 接住）
-    const candidates: any[] = await (this.prisma.post as any).findMany({
-      where: {
-        published: true,
-        NOT: { id: postId },
-        ...(orConditions.length > 0 ? { OR: orConditions } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit * 8,
-      select: { ...POST_LIST_SELECT, aiKeywords: true },
-    });
+    if (aiKeywords.length > 0) {
+      candidates = await (this.prisma.post as any)
+        .findMany({
+          where: {
+            published: true,
+            NOT: { id: post.id },
+            aiKeywords: { hasSome: aiKeywords },
+          },
+          orderBy: { createdAt: 'desc' },
+          take: limit * 8,
+          select: { ...POST_LIST_SELECT, aiKeywords: true },
+        })
+        .catch(() => []);
+    }
 
-    return this._scoreAndSlice(candidates, aiKeywords, tagIds, limit);
-  }
-
-  // ── 私有：仅标签兜底（迁移前） ────────────────────────────────────────────
-  private async _relatedByTagsOnly(
-    postId: number,
-    tagIds: number[],
-    limit: number,
-  ) {
-    const hasTags = tagIds.length > 0;
-
-    let candidates = await this.prisma.post.findMany({
-      where: {
-        published: true,
-        NOT: { id: postId },
-        ...(hasTags ? { tags: { some: { tagId: { in: tagIds } } } } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      take: limit * 6,
-      select: POST_LIST_SELECT,
-    });
-
+    // 候选不足时用最新文章补齐
     if (candidates.length < limit) {
-      const ids = [postId, ...candidates.map((c) => (c as any).id)];
+      const excludeIds = [post.id, ...candidates.map((c) => c.id)];
       const extra = await this.prisma.post.findMany({
-        where: { published: true, NOT: { id: { in: ids } } },
+        where: { published: true, NOT: { id: { in: excludeIds } } },
         orderBy: { createdAt: 'desc' },
         take: limit - candidates.length,
         select: POST_LIST_SELECT,
@@ -324,44 +262,86 @@ export class PostsService {
       candidates = [...candidates, ...extra];
     }
 
-    return this._scoreAndSlice(candidates, [], tagIds, limit);
+    return this._scoreAndSlice(candidates, aiKeywords, limit);
   }
 
-  // ── 私有：打分排序 ────────────────────────────────────────────────────────
-  private _scoreAndSlice(
-    candidates: any[],
-    currentAiKws: string[],
-    tagIds: number[],
-    limit: number,
-  ) {
+  // ── 私有：按关键词相似度打分 ──────────────────────────────────────────────
+  private _scoreAndSlice(candidates: any[], currentAiKws: string[], limit: number) {
     const currentKwSet = new Set(currentAiKws);
 
     const scored = candidates.map((c) => {
       let score = 0;
-
-      // AI 关键词 Jaccard 相似度（主信号）
       if (currentKwSet.size > 0 && c.aiKeywords?.length > 0) {
         const candidateSet = new Set<string>(c.aiKeywords);
         const intersection = [...currentKwSet].filter((k) => candidateSet.has(k)).length;
         const union = new Set([...currentKwSet, ...candidateSet]).size;
         score += union > 0 ? (intersection / union) * 10 : 0;
       }
-
-      // 标签重叠（次信号）
-      const tagOverlap = (c.tags as any[]).filter((pt: any) => tagIds.includes(pt.tagId ?? pt.tag?.id)).length;
-      score += tagOverlap * 0.5;
-
       return { post: c, score };
     });
 
     scored.sort((a, b) => b.score - a.score);
-
     return scored.slice(0, limit).map((s) => this.formatPost(s.post));
+  }
+
+  // ── 私有：slug 生成与校验 ─────────────────────────────────────────────────
+  private async resolveSlug(input?: string): Promise<string> {
+    const provided = input?.trim();
+    if (provided) {
+      const exists = await this.prisma.post.findUnique({
+        where: { slug: provided },
+        select: { id: true },
+      });
+      if (exists) throw new ConflictException('slug 已存在');
+      return provided;
+    }
+
+    // 未填写时随机生成，重试 5 次规避极小概率的碰撞
+    for (let i = 0; i < 5; i++) {
+      const slug = this.randomSlug();
+      const exists = await this.prisma.post.findUnique({
+        where: { slug },
+        select: { id: true },
+      });
+      if (!exists) return slug;
+    }
+    throw new ConflictException('slug 生成失败，请稍后重试');
+  }
+
+  private randomSlug(): string {
+    const time = Date.now().toString(36).slice(-5);
+    const rand = Math.random().toString(36).slice(2, 8).padEnd(6, '0');
+    return `${time}${rand}`;
+  }
+
+  // ── 私有：摘要生成 ───────────────────────────────────────────────────────
+  private async resolveExcerpt(
+    title: string,
+    content: string,
+    provided?: string,
+  ): Promise<string | null> {
+    const text = provided?.trim();
+    if (text) return text;
+
+    const ai = await this.ai.generateExcerpt(title, content);
+    if (ai) return ai;
+
+    // 模型不可用时的兜底：取正文前 120 字
+    return this.fallbackExcerpt(content);
+  }
+
+  private fallbackExcerpt(content: string): string | null {
+    const plain = content
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return plain ? plain.slice(0, 120) : null;
   }
 
   // ── 私有：fire-and-forget 关键词提取 ─────────────────────────────────────
   private _asyncRefreshKeywords(id: number, title: string, content: string): void {
-    this.claude
+    this.ai
       .extractKeywords(title, content)
       .then(async (keywords) => {
         if (keywords.length === 0) return;
@@ -374,19 +354,15 @@ export class PostsService {
           // 迁移尚未执行，静默忽略
         }
       })
-      .catch(() => { /* 静默失败 */ });
+      .catch(() => {
+        /* 静默失败 */
+      });
   }
 
   // ── 工具 ─────────────────────────────────────────────────────────────────
   private formatPost(post: any) {
-    const { tags, content, ...rest } = post;
     // 中文约 400 字/分钟，最少 1 分钟
-    const readingTime = Math.max(1, Math.round((content ?? '').length / 400));
-    return {
-      ...rest,
-      content,
-      readingTime,
-      tags: (tags as any[]).map((pt: any) => pt.tag ?? pt),
-    };
+    const readingTime = Math.max(1, Math.round((post.content ?? '').length / 400));
+    return { ...post, readingTime };
   }
 }

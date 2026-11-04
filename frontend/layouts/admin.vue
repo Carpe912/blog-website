@@ -1,54 +1,19 @@
-<template>
-  <div class="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
-    <!-- Sidebar -->
-    <aside class="w-56 bg-white dark:bg-gray-800 border-r border-gray-200 dark:border-gray-700 flex flex-col fixed inset-y-0 left-0 z-30">
-      <div class="h-14 flex items-center px-5 border-b border-gray-200 dark:border-gray-700">
-        <NuxtLink to="/" class="text-sm font-semibold text-primary-600 dark:text-primary-400">← 返回前台</NuxtLink>
-      </div>
-      <nav class="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-        <NuxtLink
-          v-for="item in navItems"
-          :key="item.to"
-          :to="item.to"
-          class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors"
-          :class="isActive(item.to)
-            ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400'
-            : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'"
-        >
-          <span class="text-base">{{ item.icon }}</span>
-          {{ item.label }}
-        </NuxtLink>
-      </nav>
-      <div class="p-4 border-t border-gray-200 dark:border-gray-700">
-        <button
-          @click="logout"
-          class="w-full text-sm text-gray-500 dark:text-gray-400 hover:text-red-500 transition-colors text-left px-3 py-2"
-        >
-          退出登录
-        </button>
-      </div>
-    </aside>
-
-    <!-- Main content -->
-    <div class="ml-56 flex-1 flex flex-col min-h-screen">
-      <header class="h-14 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 flex items-center px-6 sticky top-0 z-20">
-        <h1 class="text-base font-semibold text-gray-800 dark:text-gray-100">博客管理后台</h1>
-      </header>
-      <main class="flex-1 p-6">
-        <slot />
-      </main>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 const route = useRoute()
 const router = useRouter()
+const config = useRuntimeConfig()
 
 const navItems = [
-  { to: '/admin', icon: '📊', label: '仪表盘' },
-  { to: '/admin/posts', icon: '📝', label: '文章管理' },
-  { to: '/admin/tags', icon: '🏷️', label: '标签管理' },
+  {
+    to: '/admin',
+    label: '概览',
+    icon: 'M4 13h6V4H4v9zm0 7h6v-4H4v4zm10 0h6V11h-6v9zm0-16v4h6V4h-6z',
+  },
+  {
+    to: '/admin/posts',
+    label: '文章',
+    icon: 'M5 4h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1zM8 9h8M8 13h8M8 17h5',
+  },
 ]
 
 function isActive(path: string) {
@@ -61,3 +26,84 @@ function logout() {
   router.push('/admin/login')
 }
 </script>
+
+<template>
+  <div class="min-h-screen bg-white dark:bg-slate-950">
+    <!-- 侧边栏 -->
+    <aside
+      class="fixed inset-y-0 left-0 z-30 flex w-60 flex-col border-r border-slate-200/80
+             bg-white dark:border-slate-800 dark:bg-slate-900"
+    >
+      <!-- 品牌 -->
+      <div class="flex h-16 items-center px-6">
+        <NuxtLink to="/admin" class="flex items-center gap-2.5">
+          <span class="flex h-7 w-7 items-center justify-center rounded-lg bg-slate-900 dark:bg-white">
+            <svg class="h-3.5 w-3.5 text-white dark:text-slate-900" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 19.5V6a2 2 0 012-2h12a2 2 0 012 2v13.5M8 8h8M8 12h5" />
+            </svg>
+          </span>
+          <span class="text-sm font-semibold tracking-tight text-slate-900 dark:text-slate-100">
+            {{ config.public.siteName }}
+          </span>
+        </NuxtLink>
+      </div>
+
+      <!-- 导航 -->
+      <nav class="flex-1 space-y-0.5 px-3 py-4">
+        <NuxtLink
+          v-for="item in navItems"
+          :key="item.to"
+          :to="item.to"
+          class="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] font-medium transition-colors"
+          :class="isActive(item.to)
+            ? 'bg-slate-100 text-slate-900 dark:bg-slate-800 dark:text-white'
+            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100'"
+        >
+          <svg class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+            <path :d="item.icon" />
+          </svg>
+          {{ item.label }}
+        </NuxtLink>
+      </nav>
+
+      <!-- 底部 -->
+      <div class="border-t border-slate-100 p-3 dark:border-slate-800">
+        <NuxtLink
+          to="/"
+          target="_blank"
+          class="flex items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-slate-500
+                 transition-colors hover:bg-slate-50 hover:text-slate-900
+                 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-slate-100"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 4h6v6M20 4l-9 9M10 4H5a1 1 0 00-1 1v14a1 1 0 001 1h14a1 1 0 001-1v-5" />
+          </svg>
+          查看博客
+        </NuxtLink>
+        <button
+          type="button"
+          class="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-[13px] text-slate-500
+                 transition-colors hover:bg-slate-50 hover:text-red-600
+                 dark:text-slate-400 dark:hover:bg-slate-800/60 dark:hover:text-red-400"
+          @click="logout"
+        >
+          <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M15 17l5-5-5-5M20 12H9M12 4H6a2 2 0 00-2 2v12a2 2 0 002 2h6" />
+          </svg>
+          退出登录
+        </button>
+      </div>
+    </aside>
+
+    <!-- 主内容 -->
+    <div class="ml-60">
+      <main class="mx-auto max-w-5xl px-10 py-12">
+        <slot />
+      </main>
+    </div>
+  </div>
+</template>

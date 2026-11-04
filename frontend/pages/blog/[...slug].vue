@@ -68,9 +68,9 @@ function relatedDate(date: string) {
     <aside
       v-if="headings.length >= 2"
       class="fixed bottom-0 left-0 top-0 z-30 hidden w-[272px] overflow-y-auto border-r
-             border-slate-200/70 bg-white px-6 py-9 xl:block dark:border-slate-800/70 dark:bg-slate-950"
+             border-slate-200/70 bg-white px-6 py-9 xl:block dark:border-ink-700/70 dark:bg-ink-800"
     >
-      <p class="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-600">
+      <p class="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-ink-300">
         目录
       </p>
       <nav>
@@ -82,8 +82,8 @@ function relatedDate(date: string) {
           :class="[
             h.level === 3 ? 'pl-6' : 'pl-3',
             activeId === h.id
-              ? 'border-slate-900 font-medium text-slate-900 dark:border-slate-300 dark:text-slate-100'
-              : 'border-transparent text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300',
+              ? 'border-slate-900 font-medium text-slate-900 dark:border-ink-200 dark:text-ink-50'
+              : 'border-transparent text-slate-400 hover:text-slate-700 dark:text-ink-300 dark:hover:text-ink-200',
           ]"
         >
           {{ h.text }}
@@ -98,20 +98,20 @@ function relatedDate(date: string) {
         <NuxtLink
           to="/"
           class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-400 transition-colors
-                 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300"
+                 hover:text-slate-700 dark:text-ink-300 dark:hover:text-ink-200"
         >
           <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
             stroke-linecap="round" stroke-linejoin="round"><path d="M15 19l-7-7 7-7" /></svg>
           全部文章
         </NuxtLink>
 
-        <h1 class="mt-5 text-[2rem] font-semibold leading-[1.28] tracking-tight text-slate-900 dark:text-slate-50 sm:text-[2.4rem]">
+        <h1 class="mt-5 text-[2rem] font-semibold leading-[1.28] tracking-tight text-slate-900 dark:text-ink-50 sm:text-[2.4rem]">
           {{ post.title }}
         </h1>
 
-        <div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-400 dark:text-slate-500 tabular-nums">
+        <div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-400 dark:text-ink-300 tabular-nums">
           <time :datetime="post.publishedAt || post.createdAt">{{ formattedDate }}</time>
-          <span class="text-slate-300 dark:text-slate-700">|</span>
+          <span class="text-slate-300 dark:text-ink-600">|</span>
           <span>{{ readingTime }} 分钟阅读</span>
         </div>
       </header>
@@ -127,59 +127,59 @@ function relatedDate(date: string) {
         <!-- 页脚：上一篇 / 下一篇 -->
         <div
           v-if="adjacent && (adjacent.prev || adjacent.next)"
-          class="mt-20 grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-slate-200/80 sm:grid-cols-2 dark:border-slate-800"
+          class="mt-20 grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-slate-200/80 sm:grid-cols-2 dark:border-ink-700"
         >
           <NuxtLink
             v-if="adjacent.prev"
             :to="`/blog/${adjacent.prev.slug}`"
-            class="group bg-white px-6 py-5 transition-colors hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/60"
+            class="group bg-white px-6 py-5 transition-colors hover:bg-slate-50 dark:bg-ink-850 dark:hover:bg-ink-700/60"
           >
-            <p class="flex items-center gap-1 text-[11px] text-slate-400 dark:text-slate-500">
+            <p class="flex items-center gap-1 text-[11px] text-slate-400 dark:text-ink-300">
               <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round"><path d="M15 19l-7-7 7-7" /></svg>
               上一篇
             </p>
             <p class="mt-1.5 line-clamp-2 text-[13.5px] font-medium leading-snug text-slate-700 transition-colors
-                      group-hover:text-slate-950 dark:text-slate-300 dark:group-hover:text-white">
+                      group-hover:text-slate-950 dark:text-ink-200 dark:group-hover:text-ink-50">
               {{ adjacent.prev.title }}
             </p>
           </NuxtLink>
-          <div v-else class="hidden bg-white sm:block dark:bg-slate-900" />
+          <div v-else class="hidden bg-white sm:block dark:bg-ink-850" />
 
           <NuxtLink
             v-if="adjacent.next"
             :to="`/blog/${adjacent.next.slug}`"
-            class="group bg-white px-6 py-5 text-right transition-colors hover:bg-slate-50 dark:bg-slate-900 dark:hover:bg-slate-800/60"
+            class="group bg-white px-6 py-5 text-right transition-colors hover:bg-slate-50 dark:bg-ink-850 dark:hover:bg-ink-700/60"
           >
-            <p class="flex items-center justify-end gap-1 text-[11px] text-slate-400 dark:text-slate-500">
+            <p class="flex items-center justify-end gap-1 text-[11px] text-slate-400 dark:text-ink-300">
               下一篇
               <svg class="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round"><path d="M9 5l7 7-7 7" /></svg>
             </p>
             <p class="mt-1.5 line-clamp-2 text-[13.5px] font-medium leading-snug text-slate-700 transition-colors
-                      group-hover:text-slate-950 dark:text-slate-300 dark:group-hover:text-white">
+                      group-hover:text-slate-950 dark:text-ink-200 dark:group-hover:text-ink-50">
               {{ adjacent.next.title }}
             </p>
           </NuxtLink>
-          <div v-else class="hidden bg-white sm:block dark:bg-slate-900" />
+          <div v-else class="hidden bg-white sm:block dark:bg-ink-850" />
         </div>
 
         <!-- 相关文章 -->
         <div v-if="related && related.length" class="mt-16">
-          <p class="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-600">
+          <p class="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-ink-300">
             相关文章
           </p>
-          <ul class="divide-y divide-slate-100 border-t border-slate-200/80 dark:divide-slate-800 dark:border-slate-800">
+          <ul class="divide-y divide-slate-100 border-t border-slate-200/80 dark:divide-ink-700 dark:border-ink-700">
             <li v-for="item in related" :key="item.id">
               <NuxtLink
                 :to="`/blog/${item.slug}`"
                 class="group flex items-center gap-4 py-3.5"
               >
                 <span class="min-w-0 flex-1 truncate text-[13.5px] text-slate-600 transition-colors
-                             group-hover:text-slate-950 dark:text-slate-400 dark:group-hover:text-slate-100">
+                             group-hover:text-slate-950 dark:text-ink-300 dark:group-hover:text-ink-50">
                   {{ item.title }}
                 </span>
-                <span class="shrink-0 text-[11px] text-slate-400 dark:text-slate-600 tabular-nums">
+                <span class="shrink-0 text-[11px] text-slate-400 dark:text-ink-300 tabular-nums">
                   {{ relatedDate(item.createdAt) }}
                 </span>
               </NuxtLink>

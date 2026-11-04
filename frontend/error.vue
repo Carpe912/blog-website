@@ -3,13 +3,13 @@ const error = useError()
 </script>
 
 <template>
-  <div class="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center px-4">
+  <div class="min-h-screen bg-slate-50 dark:bg-ink-900 flex items-center justify-center px-4">
     <div class="text-center">
       <p class="text-8xl font-black text-primary-200 dark:text-primary-900 select-none">{{ error?.statusCode }}</p>
-      <h1 class="mt-2 text-2xl font-bold text-gray-800 dark:text-slate-100">
+      <h1 class="mt-2 text-2xl font-bold text-gray-800 dark:text-ink-50">
         {{ error?.statusCode === 404 ? '页面不存在' : '出错了' }}
       </h1>
-      <p class="mt-2 text-gray-500 dark:text-slate-400 text-sm">
+      <p class="mt-2 text-gray-500 dark:text-ink-300 text-sm">
         {{ error?.statusMessage || '访问的页面不存在或已被删除' }}
       </p>
       <NuxtLink to="/" class="btn-primary mt-6 mx-auto">

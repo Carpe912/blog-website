@@ -27,6 +27,21 @@ export default {
           800: '#075985',
           900: '#0c4a6e',
         },
+        // 深色模式专用中性灰阶（参考飞书文档暗色配色，替代偏蓝的 slate）
+        ink: {
+          50: '#ededed',
+          100: '#dcdcdc',
+          200: '#b5b5b5',
+          300: '#909090',
+          400: '#787878',
+          500: '#5a5a5a',
+          600: '#454545',
+          700: '#333333',
+          800: '#262626',
+          850: '#212121',
+          900: '#1a1a1a',
+          950: '#151515',
+        },
       },
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Noto Sans SC"', 'sans-serif'],

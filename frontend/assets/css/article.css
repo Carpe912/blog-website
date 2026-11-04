@@ -380,34 +380,44 @@
 }
 
 /* ==========================================================================
-   暗色模式
+   暗色模式：中性灰阶（参考飞书文档暗色，避免纯黑底 + 纯白字的强反差）
    ========================================================================== */
 .dark .doc-body {
-  --doc-text: #e2e4e8;
-  --doc-text-2: #a6abb3;
-  --doc-text-3: #7f858d;
-  --doc-line: #33373d;
-  --doc-fill: #26292e;
-  --doc-fill-2: #2a2d33;
-  --doc-code-bg: #1c1f24;
-  --doc-code-inline: #d6dae1;
+  --doc-text: #dcdcdc;
+  --doc-text-2: #a8a8a8;
+  --doc-text-3: #858585;
+  --doc-line: #333333;
+  --doc-fill: #262626;
+  --doc-fill-2: #2e2e2e;
+  --doc-code-bg: #232323;
+  --doc-code-inline: #dcdcdc;
   --doc-mark: #5c4a12;
 }
 
+/* 标题比正文亮一档，保持层级但不刺眼 */
+.dark .doc-body h1,
+.dark .doc-body h2,
+.dark .doc-body h3,
+.dark .doc-body h4,
+.dark .doc-body h5,
+.dark .doc-body h6 {
+  color: #ededed;
+}
+
 .dark .doc-body blockquote {
-  border-left-color: #4a5058;
+  border-left-color: #3d3d3d;
 }
 
 .dark .doc-body a {
-  text-decoration-color: #4a5058;
+  text-decoration-color: #4a4a4a;
 }
 
 .dark .doc-body ul[data-type='taskList'] input[type='checkbox'] {
-  accent-color: #94a3b8;
+  accent-color: #909090;
 }
 
 .dark .doc-body .code-copy-btn:hover {
-  color: #dee0e3;
+  color: #ededed;
   background-color: rgba(255, 255, 255, 0.08);
 }
 

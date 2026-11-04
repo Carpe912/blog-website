@@ -27,7 +27,7 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
   <div ref="root" class="relative shrink-0">
     <button
       type="button"
-      class="flex items-center justify-center w-8 h-8 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+      class="flex items-center justify-center w-8 h-8 rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 hover:text-slate-900 transition-colors dark:border-ink-600 dark:bg-ink-850 dark:text-ink-300 dark:hover:bg-ink-700 dark:hover:text-ink-50"
       aria-haspopup="listbox"
       :aria-expanded="open"
       aria-label="切换主题"
@@ -60,19 +60,19 @@ onUnmounted(() => document.removeEventListener('click', onDocClick))
     >
       <ul
         v-if="open"
-        class="absolute right-0 mt-2 w-36 py-1 rounded-lg border border-slate-200 bg-white shadow-sm z-50 dark:border-slate-700 dark:bg-slate-900"
+        class="absolute right-0 mt-2 w-36 py-1 rounded-lg border border-slate-200 bg-white shadow-sm z-50 dark:border-ink-600 dark:bg-ink-850"
         role="listbox"
       >
         <li v-for="opt in options" :key="opt.value">
           <button
             type="button"
             role="option"
-            class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800 flex items-center justify-between gap-2"
+            class="w-full text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-ink-100 dark:hover:bg-ink-700 flex items-center justify-between gap-2"
             :aria-selected="preference === opt.value"
             @click="select(opt.value)"
           >
             {{ opt.label }}
-            <span v-if="preference === opt.value" class="text-slate-500 dark:text-slate-400 text-xs">✓</span>
+            <span v-if="preference === opt.value" class="text-slate-500 dark:text-ink-300 text-xs">✓</span>
           </button>
         </li>
       </ul>

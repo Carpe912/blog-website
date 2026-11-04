@@ -1,12 +1,25 @@
 name: Deploy to Server
 
-# 2026-11-04：改为手动触发。
-# 原因：原 push 触发会在每次推送后 ssh 到服务器执行
-#   git reset --hard + rm -rf node_modules + npm install + build + pm2 restart，
-# 与本地手动部署并发执行时会清空 node_modules 并留下半成品构建（表现为 nuxt: command not found）。
-# 需要自动部署时到 Actions 页面手动 Run workflow。
+# 推送 main 自动部署；也可以在 Actions 页面手动 Run workflow。
+#
+# 具体逻辑全部在服务器上的 scripts/deploy.sh 里（与手动部署共用一套）：
+#   - 自动切到 admin 用户（node / pm2 只装在 admin 名下）
+#   - flock 加锁，避免自动部署与手动部署并发
+#   - 不执行 git reset --hard；依赖只在 package-lock 变化时重装
+#   - 前端构建失败自动回滚上一版产物，不重启进程
+#
+# 2026-11-04 修复记录：原脚本用 root SSH 直连，root 环境没有 nvm/pm2，
+# 且每次 rm -rf node_modules 后重装，和手动部署撞车时会清空依赖。
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
+
+# 同一分支同时只跑一个部署，后推的排队而不是并行
+concurrency:
+  group: deploy-main
+  cancel-in-progress: false
 
 jobs:
   deploy:
@@ -14,51 +27,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
+      - name: Run deploy script on server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           port: ${{ secrets.SSH_PORT }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script_stop: true   # 任意步骤失败即终止
+          script_stop: true
+          command_timeout: 20m
           script: |
-            set -e
-
-            PROJECT_DIR="/www/wwwroot/blog-website"
-
-            echo "===== [1/6] 拉取最新代码 ====="
-            cd $PROJECT_DIR
-            git reset --hard HEAD
-            git pull origin main
-
-            # 加载 nvm（非交互式 shell 需手动 source）
-            export NVM_DIR="$HOME/.nvm"
-            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-
-            # 切换淘宝 npm 镜像
-            npm config set registry https://registry.npmmirror.com
-
-            echo "===== [2/6] 安装依赖（workspaces 统一安装）====="
-            cd $PROJECT_DIR
-            rm -rf node_modules backend/node_modules frontend/node_modules
-            npm install
-
-            echo "===== [3/6] Prisma 生成 & 迁移 ====="
-            cd $PROJECT_DIR/backend
-            npx prisma generate
-            npx prisma migrate deploy
-
-            echo "===== [4/6] 构建后端 ====="
-            cd $PROJECT_DIR
-            npm run build:backend
-
-            echo "===== [5/6] 构建前端 ====="
-            npm run build:frontend
-
-            echo "===== [6/6] PM2 重启服务 ====="
-            pm2 restart blog-backend
-            pm2 restart blog-frontend
-            pm2 save
-
-            echo "===== 部署完成 $(date) ====="
+            bash /www/wwwroot/blog-website/scripts/deploy.sh

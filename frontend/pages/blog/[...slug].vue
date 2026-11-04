@@ -64,9 +64,37 @@ function relatedDate(date: string) {
 
 <template>
   <div v-if="post">
-    <!-- 文章头部 -->
-    <header class="mx-auto max-w-[1240px] px-6 pb-10 pt-16 sm:px-8 sm:pt-20">
-      <div class="xl:pl-[16rem]">
+    <!-- 左侧目录：固定在页面最左边，独立滚动 -->
+    <aside
+      v-if="headings.length >= 2"
+      class="fixed bottom-0 left-0 top-14 z-30 hidden w-[272px] overflow-y-auto border-r
+             border-slate-200/70 bg-white px-6 py-9 xl:block dark:border-slate-800/70 dark:bg-slate-950"
+    >
+      <p class="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-600">
+        目录
+      </p>
+      <nav>
+        <a
+          v-for="h in headings"
+          :key="h.id"
+          :href="`#${h.id}`"
+          class="block truncate border-l-2 py-[5px] pr-2 text-[12.5px] leading-relaxed transition-colors"
+          :class="[
+            h.level === 3 ? 'pl-6' : 'pl-3',
+            activeId === h.id
+              ? 'border-slate-900 font-medium text-slate-900 dark:border-slate-300 dark:text-slate-100'
+              : 'border-transparent text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300',
+          ]"
+        >
+          {{ h.text }}
+        </a>
+      </nav>
+    </aside>
+
+    <!-- 正文：目录让出的那一列 -->
+    <div :class="headings.length >= 2 ? 'xl:pl-[272px]' : ''">
+      <!-- 文章头部 -->
+      <header class="mx-auto max-w-[860px] px-6 pb-9 pt-16 sm:px-8 sm:pt-20">
         <NuxtLink
           to="/"
           class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-400 transition-colors
@@ -77,24 +105,22 @@ function relatedDate(date: string) {
           全部文章
         </NuxtLink>
 
-        <h1 class="mt-7 text-[1.85rem] font-semibold leading-[1.3] tracking-tight text-slate-900 dark:text-slate-50 sm:text-[2.15rem]">
+        <h1 class="mt-6 text-[2rem] font-semibold leading-[1.28] tracking-tight text-slate-900 dark:text-slate-50 sm:text-[2.4rem]">
           {{ post.title }}
         </h1>
 
-        <div class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-400 dark:text-slate-500 tabular-nums">
+        <div class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-400 dark:text-slate-500 tabular-nums">
           <time :datetime="post.publishedAt || post.createdAt">{{ formattedDate }}</time>
-          <span class="text-slate-300 dark:text-slate-700">·</span>
+          <span class="text-slate-300 dark:text-slate-700">|</span>
           <span>{{ readingTime }} 分钟阅读</span>
         </div>
-      </div>
-    </header>
+      </header>
 
-    <!-- 正文区 -->
-    <div class="mx-auto max-w-[1240px] px-6 pb-24 sm:px-8">
-      <div class="flex items-start gap-16">
+      <!-- 正文区 -->
+      <div class="mx-auto max-w-[860px] px-6 pb-24 sm:px-8">
         <article
           ref="articleRef"
-          class="prose prose-slate min-w-0 max-w-none flex-1
+          class="prose prose-slate max-w-none
                  dark:prose-invert
                  prose-headings:font-semibold prose-headings:tracking-tight
                  prose-a:text-slate-900 prose-a:underline prose-a:decoration-slate-300 prose-a:underline-offset-2
@@ -103,36 +129,7 @@ function relatedDate(date: string) {
           v-html="renderedContent"
         />
 
-        <!-- 目录 -->
-        <aside
-          v-if="headings.length >= 2"
-          class="order-first sticky top-24 hidden w-48 shrink-0 xl:block"
-        >
-          <p class="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-600">
-            目录
-          </p>
-          <nav class="max-h-[calc(100vh-8rem)] space-y-1 overflow-y-auto">
-            <a
-              v-for="h in headings"
-              :key="h.id"
-              :href="`#${h.id}`"
-              class="block truncate rounded py-0.5 text-[12.5px] leading-relaxed transition-colors"
-              :class="[
-                h.level === 3 ? 'pl-3' : '',
-                activeId === h.id
-                  ? 'text-slate-900 dark:text-slate-100'
-                  : 'text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300',
-              ]"
-            >
-              {{ h.text }}
-            </a>
-          </nav>
-        </aside>
-      </div>
-
-      <!-- 页脚：上下篇 + 相关文章，与正文列左对齐 -->
-      <div class="xl:pl-[16rem]">
-        <!-- 上一篇 / 下一篇 -->
+        <!-- 页脚：上一篇 / 下一篇 -->
         <div
           v-if="adjacent && (adjacent.prev || adjacent.next)"
           class="mt-20 grid grid-cols-1 gap-px overflow-hidden rounded-xl border border-slate-200/80 sm:grid-cols-2 dark:border-slate-800"

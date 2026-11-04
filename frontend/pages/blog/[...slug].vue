@@ -54,6 +54,9 @@ const readingTime = computed(() => post.value?.readingTime ?? 1)
 const articleRef = ref<HTMLElement | null>(null)
 const { headings, activeId } = useToc(renderedContent, articleRef)
 
+// 目录栏当前占宽（折叠时为 0），由 ArticleToc 上报，正文据此让位
+const tocWidth = ref(272)
+
 // ── 代码块复制按钮 ──────────────────────────────────────────────────────────
 useCodeCopy(articleRef)
 
@@ -64,35 +67,19 @@ function relatedDate(date: string) {
 
 <template>
   <div v-if="post">
-    <!-- 左侧目录：固定在页面最左边，独立滚动 -->
-    <aside
+    <!-- 左侧目录：固定在页面最左边，可拖拽调宽，过窄自动折叠 -->
+    <ArticleToc
       v-if="headings.length >= 2"
-      class="fixed bottom-0 left-0 top-0 z-30 hidden w-[272px] overflow-y-auto border-r
-             border-slate-200/70 bg-white px-6 py-9 xl:block dark:border-ink-700/70 dark:bg-ink-800"
-    >
-      <p class="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-ink-300">
-        目录
-      </p>
-      <nav>
-        <a
-          v-for="h in headings"
-          :key="h.id"
-          :href="`#${h.id}`"
-          class="block truncate border-l-2 py-[5px] pr-2 text-[12.5px] leading-relaxed transition-colors"
-          :class="[
-            h.level === 3 ? 'pl-6' : 'pl-3',
-            activeId === h.id
-              ? 'border-slate-900 font-medium text-slate-900 dark:border-ink-200 dark:text-ink-50'
-              : 'border-transparent text-slate-400 hover:text-slate-700 dark:text-ink-300 dark:hover:text-ink-200',
-          ]"
-        >
-          {{ h.text }}
-        </a>
-      </nav>
-    </aside>
+      :headings="headings"
+      :active-id="activeId"
+      @update:width="tocWidth = $event"
+    />
 
-    <!-- 正文：目录让出的那一列 -->
-    <div :class="headings.length >= 2 ? 'xl:pl-[272px]' : ''">
+    <!-- 正文：目录让出的那一列（宽度跟随拖拽结果） -->
+    <div
+      :class="headings.length >= 2 ? 'xl:pl-[var(--toc-w)]' : ''"
+      :style="{ '--toc-w': `${tocWidth}px` }"
+    >
       <!-- 文章头部 -->
       <header class="mx-auto max-w-[1000px] px-6 pb-7 pt-14 sm:px-8 sm:pt-16">
         <NuxtLink

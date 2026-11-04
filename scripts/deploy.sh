@@ -57,6 +57,9 @@ log "===== 开始部署 $(git rev-parse --short HEAD) ====="
 
 # ── 4. 拉取代码（只用快进合并，避免覆盖服务器上的本地改动）──────────────
 log "拉取代码"
+# 服务器上的 npm install 会改写 lockfile，这类生成文件的本地差异先丢弃，
+# 否则下次 lockfile 有更新时会阻塞快进合并
+git checkout -- package-lock.json 2>/dev/null || true
 if ! git pull --ff-only origin main; then
   log "快进合并失败，服务器工作区可能有本地改动："
   git status --short || true

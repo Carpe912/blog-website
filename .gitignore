@@ -5,3 +5,8 @@ dist
 .vscode
 .output
 scripts/
+
+# 环境变量：含密钥，不入库（改为 .env.example 提供模板）
+.env
+backend/.env
+.workbuddy/

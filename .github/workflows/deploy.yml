@@ -1,9 +1,12 @@
 name: Deploy to Server
 
+# 2026-11-04：改为手动触发。
+# 原因：原 push 触发会在每次推送后 ssh 到服务器执行
+#   git reset --hard + rm -rf node_modules + npm install + build + pm2 restart，
+# 与本地手动部署并发执行时会清空 node_modules 并留下半成品构建（表现为 nuxt: command not found）。
+# 需要自动部署时到 Actions 页面手动 Run workflow。
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
   deploy:

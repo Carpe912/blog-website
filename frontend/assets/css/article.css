@@ -267,6 +267,12 @@
   background: transparent;
 }
 
+/* 代码块内部任何元素都不再自带底色，避免出现逐行灰底 */
+.doc-body pre code,
+.doc-body pre code * {
+  background: transparent !important;
+}
+
 /* 代码块顶部工具栏（语言标签 + 复制） */
 .doc-body .code-toolbar {
   display: flex;

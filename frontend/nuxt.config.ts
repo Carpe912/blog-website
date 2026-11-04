@@ -22,6 +22,9 @@ export default defineNuxtConfig({
 
   modules: ['@nuxtjs/tailwindcss'],
 
+  // 全局样式：正文排版（.doc-body）独立维护，便于按文档阅读体验调整
+  css: ['~/assets/css/article.css'],
+
   tailwindcss: {
     cssPath: '~/assets/css/tailwind.css',
     configPath: 'tailwind.config',

@@ -120,12 +120,7 @@ function relatedDate(date: string) {
       <div class="mx-auto max-w-[1000px] px-6 pb-20 sm:px-8">
         <article
           ref="articleRef"
-          class="prose prose-slate max-w-none
-                 dark:prose-invert
-                 prose-headings:font-semibold prose-headings:tracking-tight
-                 prose-a:text-slate-900 prose-a:underline prose-a:decoration-slate-300 prose-a:underline-offset-2
-                 hover:prose-a:decoration-slate-500
-                 dark:prose-a:text-slate-100 dark:prose-a:decoration-slate-600"
+          class="doc-body"
           v-html="renderedContent"
         />
 
@@ -195,56 +190,3 @@ function relatedDate(date: string) {
     </div>
   </div>
 </template>
-
-<style scoped>
-/* 正文排版微调：让富文本内容更接近文档阅读体验 */
-:deep(.prose) {
-  font-size: 1.0625rem;
-  line-height: 1.8;
-}
-:deep(.prose > * + *) {
-  margin-top: 0.75em;
-}
-:deep(.prose h2) {
-  margin-top: 1.9em;
-  margin-bottom: 0.6em;
-  scroll-margin-top: 2.5rem;
-}
-:deep(.prose h3) {
-  margin-top: 1.55em;
-  margin-bottom: 0.5em;
-  scroll-margin-top: 2.5rem;
-}
-:deep(.prose p) {
-  margin-top: 0.65em;
-  margin-bottom: 0.65em;
-}
-:deep(.prose img) {
-  border-radius: 0.75rem;
-}
-:deep(.prose table) {
-  font-size: 0.9rem;
-}
-:deep(.prose th) {
-  font-weight: 600;
-}
-:deep(.prose ul[data-type='taskList']) {
-  list-style: none;
-  padding-left: 0.25rem;
-}
-:deep(.prose ul[data-type='taskList'] li) {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-}
-:deep(.prose ul[data-type='taskList'] input[type='checkbox']) {
-  margin-top: 0.55rem;
-  accent-color: #0f172a;
-}
-:deep(.prose pre) {
-  border: 0;
-}
-:deep(.prose .code-block-wrapper) {
-  margin: 1.2rem 0;
-}
-</style>

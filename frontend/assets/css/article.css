@@ -1,0 +1,420 @@
+/* ==========================================================================
+   博客正文排版 —— 参考飞书文档的阅读体验（紧凑段落 / 细线引用 / 浅灰代码块）
+   作用域：.doc-body，仅影响前台文章正文，不影响后台富文本编辑器
+   ========================================================================== */
+
+.doc-body {
+  /* 颜色令牌：沿用博客自身的灰阶，不引入飞书的品牌色 */
+  --doc-text: #1f2329;
+  --doc-text-2: #5c6470;
+  --doc-text-3: #8f959e;
+  --doc-line: #e3e6ea;
+  --doc-fill: #f5f6f7;
+  --doc-fill-2: #f2f3f5;
+  --doc-code-bg: #f6f7f8;
+  --doc-code-inline: #334155;
+  --doc-mark: #fdf0b8;
+
+  /* 字体：系统字体栈，与飞书一致（中文优先苹方/微软雅黑） */
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Noto Sans SC', 'Segoe UI', sans-serif;
+  font-size: 15px;
+  line-height: 1.8;
+  color: var(--doc-text);
+  overflow-wrap: break-word;
+  font-feature-settings: 'kern' 1;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 标题 ---------- */
+.doc-body h1,
+.doc-body h2,
+.doc-body h3,
+.doc-body h4,
+.doc-body h5,
+.doc-body h6 {
+  color: var(--doc-text);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 0;
+  scroll-margin-top: 5rem;
+}
+
+.doc-body h1 {
+  font-size: 28px;
+  margin: 1.7em 0 0.7em;
+}
+
+.doc-body h2 {
+  font-size: 24px;
+  margin: 1.8em 0 0.75em;
+}
+
+.doc-body h3 {
+  font-size: 20px;
+  margin: 1.6em 0 0.6em;
+}
+
+.doc-body h4 {
+  font-size: 17px;
+  margin: 1.4em 0 0.5em;
+}
+
+.doc-body h5,
+.doc-body h6 {
+  font-size: 15px;
+  margin: 1.3em 0 0.45em;
+}
+
+/* ---------- 段落与首尾间距 ---------- */
+.doc-body p {
+  margin: 0.55em 0;
+}
+
+.doc-body > *:first-child,
+.doc-body > *:first-child > *:first-child {
+  margin-top: 0;
+}
+
+.doc-body > *:last-child,
+.doc-body > *:last-child > *:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- 链接：保留博客自身的克制风格（深色文字 + 细下划线） ---------- */
+.doc-body a {
+  color: inherit;
+  font-weight: 500;
+  text-decoration: underline;
+  text-decoration-color: #c7ccd4;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color 0.15s ease;
+}
+
+.doc-body a:hover {
+  text-decoration-color: currentColor;
+}
+
+/* ---------- 强调 ---------- */
+.doc-body strong,
+.doc-body b {
+  font-weight: 600;
+  color: var(--doc-text);
+}
+
+.doc-body em {
+  font-style: italic;
+}
+
+.doc-body mark {
+  background-color: var(--doc-mark);
+  color: var(--doc-text);
+  padding: 0 0.12em;
+  border-radius: 2px;
+}
+
+.doc-body del {
+  color: var(--doc-text-3);
+}
+
+/* ---------- 引用：左侧细灰线，去掉背景块 ---------- */
+.doc-body blockquote {
+  margin: 1.05em 0;
+  padding: 0.1em 0 0.1em 16px;
+  border-left: 3px solid #d8dce2;
+  background: none;
+  color: var(--doc-text-2);
+  font-style: normal;
+}
+
+.doc-body blockquote p {
+  margin: 0.3em 0;
+}
+
+.doc-body blockquote > *:first-child {
+  margin-top: 0;
+}
+
+.doc-body blockquote > *:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- 列表 ---------- */
+.doc-body ul,
+.doc-body ol {
+  margin: 0.55em 0;
+  padding-left: 1.5em;
+}
+
+.doc-body ul {
+  list-style: disc;
+}
+
+.doc-body ul ul {
+  list-style: circle;
+}
+
+.doc-body ol {
+  list-style: decimal;
+}
+
+.doc-body li {
+  margin: 0.22em 0;
+  padding-left: 0.1em;
+}
+
+.doc-body li > p {
+  margin: 0.2em 0;
+}
+
+.doc-body li::marker {
+  color: var(--doc-text-2);
+}
+
+.doc-body li > ul,
+.doc-body li > ol {
+  margin: 0.2em 0;
+}
+
+/* 任务列表（Tiptap 输出 data-type="taskList"） */
+.doc-body ul[data-type='taskList'] {
+  list-style: none;
+  padding-left: 0.1em;
+}
+
+.doc-body ul[data-type='taskList'] > li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5em;
+  padding-left: 0;
+}
+
+.doc-body ul[data-type='taskList'] > li > label {
+  flex: 0 0 auto;
+  margin-top: 0.35em;
+  user-select: none;
+}
+
+.doc-body ul[data-type='taskList'] > li > div {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.doc-body ul[data-type='taskList'] input[type='checkbox'] {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: #0f172a;
+  cursor: pointer;
+}
+
+/* ---------- 行内代码 ---------- */
+.doc-body :not(pre) > code {
+  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+  font-size: 0.87em;
+  font-weight: 400;
+  color: var(--doc-code-inline);
+  background-color: var(--doc-fill-2);
+  padding: 0.16em 0.36em;
+  border: 0;
+  border-radius: 4px;
+  white-space: break-spaces;
+}
+
+.doc-body code::before,
+.doc-body code::after {
+  content: none;
+}
+
+/* ---------- 代码块：浅灰底 + 圆角，无边框 ---------- */
+.doc-body pre {
+  margin: 1.05em 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  font-size: inherit;
+}
+
+.doc-body .code-block-wrapper {
+  margin: 1.05em 0;
+  background-color: var(--doc-code-bg);
+  border: 0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.doc-body .code-block-wrapper pre {
+  margin: 0;
+  overflow-x: auto;
+}
+
+.doc-body .code-block-wrapper code {
+  display: block;
+  padding: 14px 16px;
+  background: transparent;
+  border: 0;
+  color: var(--doc-text);
+  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+  tab-size: 2;
+}
+
+/* hljs 基类在该作用域内交给外框控制背景 */
+.doc-body .hljs {
+  background: transparent;
+}
+
+/* 代码块顶部工具栏（语言标签 + 复制） */
+.doc-body .code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 8px 0 16px;
+  background: transparent;
+  border: 0;
+}
+
+.doc-body .code-toolbar > .code-copy-btn:only-child {
+  margin-left: auto;
+}
+
+.doc-body .code-lang {
+  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--doc-text-3);
+  user-select: none;
+}
+
+.doc-body .code-copy-btn {
+  padding: 2px 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--doc-text-3);
+  background: transparent;
+  border: 0;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+.doc-body .code-copy-btn:hover {
+  color: var(--doc-text);
+  background-color: rgba(31, 35, 41, 0.06);
+}
+
+.doc-body .code-copy-btn.copied {
+  color: #2ea121;
+}
+
+/* ---------- 表格：细边框、浅灰表头、紧凑单元格 ---------- */
+.doc-body .tableWrapper {
+  margin: 1.05em 0;
+  overflow-x: auto;
+}
+
+.doc-body table {
+  width: 100%;
+  margin: 1.05em 0;
+  border: 1px solid var(--doc-line);
+  border-collapse: collapse;
+  border-radius: 0;
+  font-size: 13.5px;
+  line-height: 1.65;
+}
+
+.doc-body .tableWrapper table {
+  margin: 0;
+}
+
+.doc-body th,
+.doc-body td {
+  padding: 8px 12px;
+  border: 1px solid var(--doc-line);
+  vertical-align: top;
+  text-align: left;
+}
+
+.doc-body thead {
+  background-color: var(--doc-fill);
+}
+
+.doc-body th {
+  font-weight: 600;
+  color: var(--doc-text);
+}
+
+.doc-body tbody tr {
+  background-color: transparent;
+}
+
+/* ---------- 分割线 / 图片 ---------- */
+.doc-body hr {
+  margin: 2em 0;
+  border: 0;
+  border-top: 1px solid var(--doc-line);
+}
+
+.doc-body img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.05em auto;
+  border-radius: 12px;
+}
+
+.doc-body figure {
+  margin: 1.05em 0;
+}
+
+.doc-body figcaption {
+  margin-top: 0.5em;
+  font-size: 13px;
+  color: var(--doc-text-3);
+  text-align: center;
+}
+
+/* ==========================================================================
+   暗色模式
+   ========================================================================== */
+.dark .doc-body {
+  --doc-text: #e2e4e8;
+  --doc-text-2: #a6abb3;
+  --doc-text-3: #7f858d;
+  --doc-line: #33373d;
+  --doc-fill: #26292e;
+  --doc-fill-2: #2a2d33;
+  --doc-code-bg: #1c1f24;
+  --doc-code-inline: #d6dae1;
+  --doc-mark: #5c4a12;
+}
+
+.dark .doc-body blockquote {
+  border-left-color: #4a5058;
+}
+
+.dark .doc-body a {
+  text-decoration-color: #4a5058;
+}
+
+.dark .doc-body ul[data-type='taskList'] input[type='checkbox'] {
+  accent-color: #94a3b8;
+}
+
+.dark .doc-body .code-copy-btn:hover {
+  color: #dee0e3;
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.dark .doc-body .code-copy-btn.copied {
+  color: #6dd47e;
+}
+
+.dark .doc-body .hljs {
+  background: transparent;
+}

@@ -720,7 +720,7 @@ npm run dev
 
 前端访问地址：`http://localhost:8080`
 
-数据来源：`https://sunlingyue.cn/api`（服务器后端，无需本地启动）
+数据来源：`https://47.116.6.132/api`（服务器后端，无需本地启动）
 
 ### 本地后台管理
 

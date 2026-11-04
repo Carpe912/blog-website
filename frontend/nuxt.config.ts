@@ -32,9 +32,9 @@ export default defineNuxtConfig({
     public: {
       siteName: process.env.SITE_NAME || '我的博客',
       siteDescription: process.env.SITE_DESCRIPTION || '记录思考，分享知识',
-      siteUrl: process.env.SITE_URL || 'http://localhost:3000',
+      siteUrl: process.env.SITE_URL || 'https://47.116.6.132',
       author: process.env.AUTHOR || 'sunlingyue',
-      apiBase: process.env.API_BASE || 'https://sunlingyue.cn/api',
+      apiBase: process.env.API_BASE || 'https://47.116.6.132/api',
     },
   },
 

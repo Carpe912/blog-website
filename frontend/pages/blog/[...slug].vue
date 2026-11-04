@@ -67,7 +67,7 @@ function relatedDate(date: string) {
     <!-- 左侧目录：固定在页面最左边，独立滚动 -->
     <aside
       v-if="headings.length >= 2"
-      class="fixed bottom-0 left-0 top-14 z-30 hidden w-[272px] overflow-y-auto border-r
+      class="fixed bottom-0 left-0 top-0 z-30 hidden w-[272px] overflow-y-auto border-r
              border-slate-200/70 bg-white px-6 py-9 xl:block dark:border-slate-800/70 dark:bg-slate-950"
     >
       <p class="mb-3 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-600">
@@ -94,7 +94,7 @@ function relatedDate(date: string) {
     <!-- 正文：目录让出的那一列 -->
     <div :class="headings.length >= 2 ? 'xl:pl-[272px]' : ''">
       <!-- 文章头部 -->
-      <header class="mx-auto max-w-[860px] px-6 pb-9 pt-16 sm:px-8 sm:pt-20">
+      <header class="mx-auto max-w-[1000px] px-6 pb-7 pt-14 sm:px-8 sm:pt-16">
         <NuxtLink
           to="/"
           class="inline-flex items-center gap-1.5 text-[12px] font-medium text-slate-400 transition-colors
@@ -105,11 +105,11 @@ function relatedDate(date: string) {
           全部文章
         </NuxtLink>
 
-        <h1 class="mt-6 text-[2rem] font-semibold leading-[1.28] tracking-tight text-slate-900 dark:text-slate-50 sm:text-[2.4rem]">
+        <h1 class="mt-5 text-[2rem] font-semibold leading-[1.28] tracking-tight text-slate-900 dark:text-slate-50 sm:text-[2.4rem]">
           {{ post.title }}
         </h1>
 
-        <div class="mt-6 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-400 dark:text-slate-500 tabular-nums">
+        <div class="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-slate-400 dark:text-slate-500 tabular-nums">
           <time :datetime="post.publishedAt || post.createdAt">{{ formattedDate }}</time>
           <span class="text-slate-300 dark:text-slate-700">|</span>
           <span>{{ readingTime }} 分钟阅读</span>
@@ -117,7 +117,7 @@ function relatedDate(date: string) {
       </header>
 
       <!-- 正文区 -->
-      <div class="mx-auto max-w-[860px] px-6 pb-24 sm:px-8">
+      <div class="mx-auto max-w-[1000px] px-6 pb-20 sm:px-8">
         <article
           ref="articleRef"
           class="prose prose-slate max-w-none
@@ -200,24 +200,24 @@ function relatedDate(date: string) {
 /* 正文排版微调：让富文本内容更接近文档阅读体验 */
 :deep(.prose) {
   font-size: 1.0625rem;
-  line-height: 1.9;
+  line-height: 1.8;
 }
 :deep(.prose > * + *) {
-  margin-top: 1em;
+  margin-top: 0.75em;
 }
 :deep(.prose h2) {
-  margin-top: 2.4em;
-  margin-bottom: 0.7em;
-  scroll-margin-top: 6rem;
+  margin-top: 1.9em;
+  margin-bottom: 0.6em;
+  scroll-margin-top: 2.5rem;
 }
 :deep(.prose h3) {
-  margin-top: 2em;
-  margin-bottom: 0.6em;
-  scroll-margin-top: 6rem;
+  margin-top: 1.55em;
+  margin-bottom: 0.5em;
+  scroll-margin-top: 2.5rem;
 }
 :deep(.prose p) {
-  margin-top: 0.9em;
-  margin-bottom: 0.9em;
+  margin-top: 0.65em;
+  margin-bottom: 0.65em;
 }
 :deep(.prose img) {
   border-radius: 0.75rem;
@@ -245,6 +245,6 @@ function relatedDate(date: string) {
   border: 0;
 }
 :deep(.prose .code-block-wrapper) {
-  margin: 1.5rem 0;
+  margin: 1.2rem 0;
 }
 </style>

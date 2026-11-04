@@ -51,14 +51,11 @@ function formatDate(date: string) {
 <template>
   <div class="mx-auto max-w-4xl px-6 sm:px-8">
     <!-- 页头 -->
-    <header class="pb-14 pt-20 sm:pt-24">
-      <h1 class="text-[2rem] font-semibold tracking-tight text-slate-900 dark:text-slate-50 sm:text-[2.4rem]">
-        {{ config.public.siteName }}
-      </h1>
-      <p class="mt-4 max-w-xl text-[15px] leading-relaxed text-slate-500 dark:text-slate-400">
+    <header class="pb-10 pt-16">
+      <p class="max-w-xl text-[15px] leading-relaxed text-slate-500 dark:text-slate-400">
         {{ config.public.siteDescription }}
       </p>
-      <p class="mt-6 text-[12px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500 tabular-nums">
+      <p class="mt-5 text-[12px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-slate-500 tabular-nums">
         {{ allPosts.length }} Articles
       </p>
     </header>

@@ -351,8 +351,8 @@ const wordCount = computed(() => {
 }
 
 :deep(.ProseMirror) {
-  @apply min-h-[62vh] outline-none;
-  padding: 2.5rem 2rem 40vh;
+  @apply min-h-[72vh] outline-none;
+  padding: 2rem 1.25rem 45vh;
   font-size: 1.0625rem;
   line-height: 1.85;
   color: theme('colors.slate.700');

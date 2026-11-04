@@ -140,7 +140,7 @@ const router = useRouter()
     </header>
 
     <!-- 写作区 -->
-    <main class="mx-auto max-w-3xl px-6 pb-32 pt-12 sm:px-8">
+    <main class="mx-auto max-w-5xl px-4 pb-32 pt-9 sm:px-6">
       <!-- 标题 -->
       <textarea
         ref="titleEl"
@@ -161,14 +161,14 @@ const router = useRouter()
       </div>
 
       <!-- 正文 -->
-      <div class="mt-8 -mx-2 sm:mx-0">
+      <div class="mt-7 -mx-2 sm:mx-0">
         <ClientOnly>
           <RichTextEditor
             v-model="form.content"
             placeholder="从这里开始写正文，输入 / 唤起更多格式…"
           />
           <template #fallback>
-            <div class="min-h-[60vh] animate-pulse rounded-xl bg-slate-50 dark:bg-slate-800/40" />
+            <div class="min-h-[70vh] animate-pulse rounded-xl bg-slate-50 dark:bg-slate-800/40" />
           </template>
         </ClientOnly>
       </div>

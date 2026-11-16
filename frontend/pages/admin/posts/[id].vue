@@ -30,7 +30,10 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: false, middleware: 'admin' })
+// 后台页面统一关闭页面过渡：编辑器用 layout: false，切到/切回 admin 布局时
+// 过渡动画包裹的元素会被父级结构变化替换掉，导致离开动画收不到结束回调，
+// 旧页面 DOM 残留，表现为列表和编辑器同时出现在屏幕上。
+definePageMeta({ layout: false, middleware: 'admin', pageTransition: false })
 
 const route = useRoute()
 const postsApi = usePostsApi()
@@ -40,11 +43,16 @@ const post = ref<any>(null)
 
 const id = Number(route.params.id)
 
-try {
-  post.value = await postsApi.get(id)
-} catch {
-  await navigateTo('/admin/posts')
-}
+// 不在 setup 顶层 await：顶层 await 会让整个页面进入 Suspense 挂起状态，
+// 挂起期间旧页面的 DOM 一直留在文档里，一旦这期间发生布局切换或再次导航，
+// 就会卡成两页叠加。改为挂载后取数，页面立刻渲染骨架，不存在挂起窗口。
+onMounted(async () => {
+  try {
+    post.value = await postsApi.get(id)
+  } catch {
+    await navigateTo('/admin/posts')
+  }
+})
 
 async function handleUpdate(formData: any) {
   saving.value = true

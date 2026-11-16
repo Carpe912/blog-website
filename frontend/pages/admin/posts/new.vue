@@ -5,7 +5,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: false, middleware: 'admin' })
+definePageMeta({ layout: false, middleware: 'admin', pageTransition: false })
 
 const postsApi = usePostsApi()
 const router = useRouter()

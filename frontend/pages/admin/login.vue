@@ -83,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: false })
+definePageMeta({ layout: false, pageTransition: false })
 
 const password = ref('')
 const loading = ref(false)

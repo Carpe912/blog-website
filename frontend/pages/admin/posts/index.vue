@@ -167,7 +167,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'admin', middleware: 'admin' })
+definePageMeta({ layout: 'admin', middleware: 'admin', pageTransition: false })
 
 const postsApi = usePostsApi()
 const posts = ref<any[]>([])
@@ -223,7 +223,10 @@ function formatDate(d: string) {
   return new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
 }
 
-await Promise.all([loadPosts(), loadPublishedCount()])
+// 不在 setup 顶层 await：避免 Suspense 挂起期间旧页面（如编辑器）残留在文档里
+onMounted(() => {
+  Promise.all([loadPosts(), loadPublishedCount()])
+})
 </script>
 
 <style scoped>

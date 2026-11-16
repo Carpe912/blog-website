@@ -82,7 +82,7 @@
 </template>
 
 <script setup lang="ts">
-definePageMeta({ layout: 'admin', middleware: 'admin' })
+definePageMeta({ layout: 'admin', middleware: 'admin', pageTransition: false })
 
 const postsApi = usePostsApi()
 
@@ -102,16 +102,20 @@ const greeting = computed(() => {
   return '晚上好，记录今天'
 })
 
-const [allRes, publishedRes, recentRes] = await Promise.all([
-  postsApi.list({ limit: 1 }),
-  postsApi.list({ published: 'true', limit: 1 }),
-  postsApi.list({ limit: 5 }),
-])
+// 不在 setup 顶层 await：顶层 await 会让页面进入 Suspense 挂起，挂起期间上一页的
+// DOM 仍留在文档中，一旦挂起结束时布局发生变化，就容易残留成两页叠加
+onMounted(async () => {
+  const [allRes, publishedRes, recentRes] = await Promise.all([
+    postsApi.list({ limit: 1 }),
+    postsApi.list({ published: 'true', limit: 1 }),
+    postsApi.list({ limit: 5 }),
+  ])
 
-stats[0].value = (allRes as any).meta?.total ?? 0
-stats[1].value = (publishedRes as any).meta?.total ?? 0
-stats[2].value = stats[0].value - stats[1].value
-recent.value = (recentRes as any).data ?? []
+  stats[0].value = (allRes as any).meta?.total ?? 0
+  stats[1].value = (publishedRes as any).meta?.total ?? 0
+  stats[2].value = stats[0].value - stats[1].value
+  recent.value = (recentRes as any).data ?? []
+})
 
 function formatDate(d: string) {
   return new Date(d).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })

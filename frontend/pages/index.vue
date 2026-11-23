@@ -93,7 +93,7 @@ function formatDate(date: string) {
               <h2 class="reader-display text-xl font-bold leading-snug group-hover:text-[var(--reader-accent)] sm:text-2xl">
                 {{ post.title }}
               </h2>
-              <p v-if="post.excerpt" class="mt-2 line-clamp-2 break-words text-[15px] leading-relaxed text-[var(--reader-muted)]">
+              <p v-if="post.excerpt" class="archive-excerpt mt-2 line-clamp-2 break-words text-[15px] leading-relaxed text-[var(--reader-muted)]">
                 {{ post.excerpt }}
               </p>
               <p class="mt-3 text-xs tabular-nums text-[var(--reader-muted)]">{{ post.readingTime ?? 1 }} 分钟阅读</p>
@@ -124,6 +124,16 @@ function formatDate(date: string) {
 
 .archive-search input:focus {
   outline: none;
+}
+
+@media (hover: hover) {
+  .archive-excerpt:hover {
+    @apply line-clamp-none;
+  }
+}
+
+.group:focus-visible .archive-excerpt {
+  @apply line-clamp-none;
 }
 
 .archive-page-btn {

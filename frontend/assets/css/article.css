@@ -10,8 +10,7 @@
   --doc-code-inline: var(--reader-ink);
   --doc-mark: #fdf0b8;
 
-  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
-    'Microsoft YaHei', 'Noto Sans SC', 'Segoe UI', sans-serif;
+  font-family: Georgia, var(--reader-display);
   font-size: clamp(1.0625rem, 1rem + 0.25vw, 1.125rem);
   line-height: 1.85;
   color: var(--doc-text);

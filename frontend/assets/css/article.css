@@ -10,7 +10,7 @@
   --doc-code-inline: var(--reader-ink);
   --doc-mark: #fdf0b8;
 
-  font-family: Georgia, var(--reader-display);
+  font-family: var(--reader-body-font);
   font-size: clamp(1.0625rem, 1rem + 0.25vw, 1.125rem);
   line-height: 1.85;
   color: var(--doc-text);
@@ -252,7 +252,7 @@
   border: 0;
   color: var(--doc-text);
   font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
-  font-size: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);
+  font-size: clamp(0.875rem, 0.85rem + 0.15vw, 0.9375rem);
   line-height: 1.65;
   tab-size: 2;
 }

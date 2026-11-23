@@ -60,6 +60,7 @@ onUnmounted(() => window.removeEventListener('scroll', updateBackToTop))
   --reader-line: #e3dbcf;
   --reader-accent: #963f30;
   --reader-display: 'Songti SC', 'Noto Serif CJK SC', 'Noto Serif SC', SimSun, Georgia, serif;
+  --reader-body-font: Georgia, var(--reader-display);
   background: var(--reader-paper);
   color: var(--reader-ink);
 }

@@ -125,7 +125,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <details ref="mobileToc" class="mt-5 rounded-md border border-[var(--reader-line)] xl:hidden">
+  <details ref="mobileToc" class="toc-text mt-5 rounded-md border border-[var(--reader-line)] xl:hidden">
     <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-[var(--reader-muted)]">目录</summary>
     <nav aria-label="文章目录" class="grid gap-1 border-t border-[var(--reader-line)] px-4 py-2">
       <a
@@ -165,7 +165,7 @@ onBeforeUnmount(() => {
   <!-- 展开状态：可调宽度的目录栏 -->
   <div v-if="!collapsed" class="fixed bottom-6 left-0 top-24 z-30 hidden xl:block" :style="{ width: width + 'px' }">
     <aside
-      class="h-full overflow-y-auto border-r border-[var(--reader-line)] bg-[var(--reader-paper)] px-6 py-2"
+      class="toc-text h-full overflow-y-auto border-r border-[var(--reader-line)] bg-[var(--reader-paper)] px-6 py-2"
       @scroll="hideTip"
     >
       <div class="mb-3 flex items-center justify-between">
@@ -223,7 +223,7 @@ onBeforeUnmount(() => {
   <!-- 被截断标题的完整文字 -->
   <div
     v-if="tip.visible"
-    class="pointer-events-none fixed z-50 max-w-[320px] rounded-md bg-slate-900/95 px-2.5 py-1.5
+    class="toc-text pointer-events-none fixed z-50 max-w-[320px] rounded-md bg-slate-900/95 px-2.5 py-1.5
            text-[12px] leading-snug text-white shadow-lg
            dark:bg-ink-100 dark:text-ink-900"
     :style="{ top: tip.top + 'px', left: tip.left + 'px', transform: 'translateY(-50%)' }"
@@ -231,3 +231,9 @@ onBeforeUnmount(() => {
     {{ tip.text }}
   </div>
 </template>
+
+<style scoped>
+.toc-text {
+  font-family: var(--reader-body-font);
+}
+</style>

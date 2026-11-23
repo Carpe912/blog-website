@@ -79,7 +79,7 @@ function formatDate(date: string) {
               <p
                 v-if="post.excerpt"
                 :title="post.excerpt"
-                class="mt-2 line-clamp-2 break-words text-[15px] leading-relaxed text-[var(--reader-muted)]"
+                class="reader-display mt-2 line-clamp-2 break-words text-[15px] leading-relaxed text-[var(--reader-muted)]"
               >
                 {{ post.excerpt }}
               </p>

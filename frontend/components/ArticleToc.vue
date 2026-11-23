@@ -126,14 +126,14 @@ onBeforeUnmount(() => {
 
 <template>
   <details ref="mobileToc" class="toc-text mt-5 rounded-md border border-[var(--reader-line)] xl:hidden">
-    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-[var(--reader-muted)]">目录</summary>
+    <summary class="cursor-pointer px-4 py-3 text-[15px] font-medium text-[var(--reader-muted)]">目录</summary>
     <nav aria-label="文章目录" class="grid gap-1 border-t border-[var(--reader-line)] px-4 py-2">
       <a
         v-for="heading in headings"
         :key="heading.id"
         :href="`#${heading.id}`"
         :aria-current="activeId === heading.id ? 'location' : undefined"
-        class="break-words py-2 text-sm hover:text-[var(--reader-accent)]"
+        class="break-words py-2 text-[15px] hover:text-[var(--reader-accent)]"
         :class="[
           heading.level === 3 ? 'pl-4' : '',
           activeId === heading.id ? 'text-[var(--reader-accent)]' : 'text-[var(--reader-muted)]',
@@ -169,7 +169,7 @@ onBeforeUnmount(() => {
       @scroll="hideTip"
     >
       <div class="mb-3 flex items-center justify-between">
-        <p class="text-sm font-semibold text-[var(--reader-ink)]">
+        <p class="text-[15px] font-semibold text-[var(--reader-ink)]">
           目录
         </p>
         <button
@@ -193,7 +193,7 @@ onBeforeUnmount(() => {
           :key="h.id"
           :href="`#${h.id}`"
           :aria-current="activeId === h.id ? 'location' : undefined"
-          class="block truncate border-l-2 py-[5px] pr-2 text-[13px] leading-relaxed transition-colors"
+          class="block truncate border-l-2 py-[5px] pr-2 text-sm leading-relaxed transition-colors"
           :class="[
             h.level === 3 ? 'pl-6' : 'pl-3',
             activeId === h.id
@@ -224,7 +224,7 @@ onBeforeUnmount(() => {
   <div
     v-if="tip.visible"
     class="toc-text pointer-events-none fixed z-50 max-w-[320px] rounded-md bg-slate-900/95 px-2.5 py-1.5
-           text-[12px] leading-snug text-white shadow-lg
+           text-[13px] leading-snug text-white shadow-lg
            dark:bg-ink-100 dark:text-ink-900"
     :style="{ top: tip.top + 'px', left: tip.left + 'px', transform: 'translateY(-50%)' }"
   >

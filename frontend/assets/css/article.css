@@ -63,7 +63,7 @@
 
 /* ---------- 段落与首尾间距 ---------- */
 .doc-body p {
-  margin: 0.9em 0;
+  margin: 0.7em 0;
 }
 
 .doc-body > *:first-child,

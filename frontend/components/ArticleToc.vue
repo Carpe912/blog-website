@@ -8,11 +8,7 @@
  *  - 标题被截断时，鼠标移上去浮层显示完整文字
  *  - 宽度与折叠状态记在 localStorage，重进保持
  */
-interface TocHeading {
-  id: string
-  text: string
-  level: 2 | 3
-}
+import type { TocHeading } from '~/composables/useToc'
 
 defineProps<{
   headings: TocHeading[]
@@ -32,6 +28,7 @@ const COLLAPSED_KEY = 'blog-toc-collapsed'
 const width = ref(DEFAULT_WIDTH)
 const collapsed = ref(false)
 const dragging = ref(false)
+const mobileToc = ref<HTMLDetailsElement | null>(null)
 
 const tip = reactive({ visible: false, text: '', top: 0, left: 0 })
 
@@ -123,18 +120,39 @@ function hideTip() {
   tip.visible = false
 }
 
-onBeforeUnmount(hideTip)
+onBeforeUnmount(() => {
+  if (dragging.value) endDrag()
+})
 </script>
 
 <template>
+  <details ref="mobileToc" class="mt-5 rounded-md border border-[var(--reader-line)] xl:hidden">
+    <summary class="cursor-pointer px-4 py-3 text-sm font-medium text-[var(--reader-muted)]">目录</summary>
+    <nav aria-label="文章目录" class="grid gap-1 border-t border-[var(--reader-line)] px-4 py-2">
+      <a
+        v-for="heading in headings"
+        :key="heading.id"
+        :href="`#${heading.id}`"
+        :aria-current="activeId === heading.id ? 'location' : undefined"
+        class="break-words py-2 text-sm hover:text-[var(--reader-accent)]"
+        :class="[
+          heading.level === 3 ? 'pl-4' : '',
+          activeId === heading.id ? 'text-[var(--reader-accent)]' : 'text-[var(--reader-muted)]',
+        ]"
+        @click="mobileToc?.removeAttribute('open')"
+      >
+        {{ heading.text }}
+      </a>
+    </nav>
+  </details>
+
   <!-- 折叠状态：左侧边缘的展开按钮 -->
   <button
     v-if="collapsed"
     type="button"
     class="fixed left-0 top-1/2 z-30 hidden h-14 w-6 -translate-y-1/2 items-center justify-center
-           rounded-r-md border border-l-0 border-slate-200 bg-white text-slate-400 shadow-sm
-           transition-colors hover:text-slate-700
-           dark:border-ink-700 dark:bg-ink-800 dark:text-ink-400 dark:hover:text-ink-50 xl:flex"
+           rounded-r-md border border-l-0 border-[var(--reader-line)] bg-[var(--reader-paper)] text-[var(--reader-muted)]
+           transition-colors hover:text-[var(--reader-accent)] xl:flex"
     title="展开目录"
     aria-label="展开目录"
     @click="expand"
@@ -146,21 +164,19 @@ onBeforeUnmount(hideTip)
   </button>
 
   <!-- 展开状态：可调宽度的目录栏 -->
-  <div v-if="!collapsed" class="fixed inset-y-0 left-0 z-30 hidden xl:block" :style="{ width: width + 'px' }">
+  <div v-if="!collapsed" class="fixed bottom-6 left-0 top-24 z-30 hidden xl:block" :style="{ width: width + 'px' }">
     <aside
-      class="h-full overflow-y-auto border-r border-slate-200/70 bg-white px-6 py-9
-             dark:border-ink-700/70 dark:bg-ink-800"
+      class="h-full overflow-y-auto border-r border-[var(--reader-line)] bg-[var(--reader-paper)] px-6 py-2"
       @scroll="hideTip"
     >
       <div class="mb-3 flex items-center justify-between">
-        <p class="text-[11px] font-medium uppercase tracking-[0.14em] text-slate-400 dark:text-ink-400">
+        <p class="text-sm font-semibold text-[var(--reader-ink)]">
           目录
         </p>
         <button
           type="button"
-          class="-mr-2 flex h-6 w-6 items-center justify-center rounded text-slate-300
-                 transition-colors hover:bg-slate-100 hover:text-slate-600
-                 dark:text-ink-500 dark:hover:bg-ink-700 dark:hover:text-ink-100"
+          class="-mr-2 flex h-6 w-6 items-center justify-center rounded text-[var(--reader-muted)]
+                 transition-colors hover:bg-[var(--reader-surface)] hover:text-[var(--reader-accent)]"
           title="收起目录"
           aria-label="收起目录"
           @click="collapse"
@@ -172,17 +188,18 @@ onBeforeUnmount(hideTip)
         </button>
       </div>
 
-      <nav @mouseleave="hideTip">
+      <nav aria-label="文章目录" @mouseleave="hideTip">
         <a
           v-for="h in headings"
           :key="h.id"
           :href="`#${h.id}`"
-          class="block truncate border-l-2 py-[5px] pr-2 text-[12.5px] leading-relaxed transition-colors"
+          :aria-current="activeId === h.id ? 'location' : undefined"
+          class="block truncate border-l-2 py-[5px] pr-2 text-[13px] leading-relaxed transition-colors"
           :class="[
             h.level === 3 ? 'pl-6' : 'pl-3',
             activeId === h.id
-              ? 'border-slate-900 font-medium text-slate-900 dark:border-ink-200 dark:text-ink-50'
-              : 'border-transparent text-slate-400 hover:text-slate-700 dark:text-ink-300 dark:hover:text-ink-100',
+              ? 'border-[var(--reader-accent)] bg-[var(--reader-surface)] font-medium text-[var(--reader-accent)]'
+              : 'border-[var(--reader-line)] text-[var(--reader-muted)] hover:text-[var(--reader-accent)]',
           ]"
           @mouseenter="showTip($event, h.text)"
           @focus="showTip($event, h.text)"

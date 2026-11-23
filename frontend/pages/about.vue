@@ -10,104 +10,30 @@ useSeoMeta({
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto px-4 sm:px-6 py-16">
+  <div class="reader-column pb-20 pt-10 sm:pt-14">
+    <header class="border-b border-[var(--reader-line)] pb-7 sm:pb-9">
+      <h1 class="reader-display text-4xl font-bold sm:text-5xl">关于</h1>
+      <p class="mt-4 text-lg font-medium">{{ config.public.author }}</p>
+      <p class="mt-2 leading-relaxed text-[var(--reader-muted)]">{{ config.public.siteDescription }}</p>
+    </header>
 
-    <!-- 头像 + 介绍 -->
-    <div class="text-center mb-12">
-      <div class="w-24 h-24 rounded-full bg-gradient-to-br from-primary-400 to-indigo-600 flex items-center justify-center mx-auto mb-5 shadow-lg dark:from-primary-600 dark:to-indigo-900">
-        <svg class="w-12 h-12 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
-            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-        </svg>
-      </div>
-      <h1 class="text-3xl font-bold text-gray-900 dark:text-ink-50 mb-2">{{ config.public.author }}</h1>
-      <p class="text-gray-500 dark:text-ink-300 text-lg">{{ config.public.siteDescription }}</p>
+    <div class="doc-body mt-8">
+      <h2>关于本站</h2>
+      <p>
+        这是一个用 <strong>Nuxt 3</strong> + <strong>@nuxt/content</strong> 构建的静态博客。
+        文章以 Markdown 文件的形式存储在 <code>content/posts/</code> 目录下，
+        通过 <code>nuxt generate</code> 构建为静态页面，部署到云服务器上用 nginx 托管。
+      </p>
+
+      <h2>技术栈</h2>
+      <ul>
+        <li>Nuxt 3 · 全栈框架</li>
+        <li>@nuxt/content · Markdown 内容管理</li>
+        <li>Tailwind CSS · 样式框架</li>
+        <li>Shiki · 代码语法高亮</li>
+        <li>Nuxt Generate · 静态站点生成</li>
+        <li>nginx · 服务器托管</li>
+      </ul>
     </div>
-
-    <!-- 卡片内容 -->
-    <div class="space-y-6">
-      <!-- 关于本站 -->
-      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 dark:bg-ink-850 dark:border-ink-700">
-        <h2 class="text-lg font-bold text-gray-900 dark:text-ink-50 mb-4 flex items-center gap-2">
-          <span class="w-7 h-7 bg-primary-100 dark:bg-primary-950 rounded-lg flex items-center justify-center">
-            <svg class="w-4 h-4 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </span>
-          关于本站
-        </h2>
-        <p class="text-gray-600 dark:text-ink-200 leading-relaxed">
-          这是一个用 <strong>Nuxt 3</strong> + <strong>@nuxt/content</strong> 构建的静态博客。
-          文章以 Markdown 文件的形式存储在 <code class="bg-gray-100 dark:bg-ink-700 text-primary-700 dark:text-primary-300 px-1.5 py-0.5 rounded text-sm">content/posts/</code> 目录下，
-          通过 <code class="bg-gray-100 dark:bg-ink-700 text-primary-700 dark:text-primary-300 px-1.5 py-0.5 rounded text-sm">nuxt generate</code> 构建为静态页面，
-          部署到云服务器上用 nginx 托管。
-        </p>
-      </div>
-
-      <!-- 技术栈 -->
-      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 dark:bg-ink-850 dark:border-ink-700">
-        <h2 class="text-lg font-bold text-gray-900 dark:text-ink-50 mb-4 flex items-center gap-2">
-          <span class="w-7 h-7 bg-emerald-100 dark:bg-emerald-950 rounded-lg flex items-center justify-center">
-            <svg class="w-4 h-4 text-emerald-600 dark:text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
-            </svg>
-          </span>
-          技术栈
-        </h2>
-        <div class="grid grid-cols-2 gap-3">
-          <div
-            v-for="item in [
-              { name: 'Nuxt 3', desc: '全栈框架' },
-              { name: '@nuxt/content', desc: 'Markdown 内容管理' },
-              { name: 'Tailwind CSS', desc: '样式框架' },
-              { name: 'Shiki', desc: '代码语法高亮' },
-              { name: 'Nuxt Generate', desc: '静态站点生成' },
-              { name: 'nginx', desc: '服务器托管' },
-            ]"
-            :key="item.name"
-            class="flex items-center gap-2.5 p-3 bg-gray-50 dark:bg-ink-700/80 rounded-xl"
-          >
-            <div class="w-2 h-2 rounded-full bg-primary-400 shrink-0" />
-            <div>
-              <p class="text-sm font-medium text-gray-800 dark:text-ink-100">{{ item.name }}</p>
-              <p class="text-xs text-gray-400 dark:text-ink-400">{{ item.desc }}</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- 如何联系 -->
-      <div class="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 dark:bg-ink-850 dark:border-ink-700">
-        <h2 class="text-lg font-bold text-gray-900 dark:text-ink-50 mb-4 flex items-center gap-2">
-          <span class="w-7 h-7 bg-blue-100 dark:bg-blue-950 rounded-lg flex items-center justify-center">
-            <svg class="w-4 h-4 text-blue-600 dark:text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          </span>
-          联系我
-        </h2>
-        <p class="text-gray-500 dark:text-ink-300 text-sm leading-relaxed">
-          可以在这里填写你的联系方式、社交媒体链接等。
-          例如：GitHub、Twitter/X、邮箱等。
-        </p>
-        <p class="text-xs text-gray-400 dark:text-ink-400 mt-3">
-          👉 编辑 <code class="bg-gray-100 dark:bg-ink-700 px-1 rounded">pages/about.vue</code> 来自定义这个页面。
-        </p>
-      </div>
-    </div>
-
-    <!-- 返回 -->
-    <div class="mt-10 text-center">
-      <NuxtLink to="/" class="btn-secondary">
-        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
-        </svg>
-        返回首页
-      </NuxtLink>
-    </div>
-
   </div>
 </template>

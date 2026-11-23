@@ -1,25 +1,19 @@
-/* ==========================================================================
-   博客正文排版 —— 参考飞书文档的阅读体验（紧凑段落 / 细线引用 / 浅灰代码块）
-   作用域：.doc-body，仅影响前台文章正文，不影响后台富文本编辑器
-   ========================================================================== */
-
+/* 前台文章正文排版 */
 .doc-body {
-  /* 颜色令牌：沿用博客自身的灰阶，不引入飞书的品牌色 */
-  --doc-text: #1f2329;
-  --doc-text-2: #5c6470;
-  --doc-text-3: #8f959e;
-  --doc-line: #e3e6ea;
-  --doc-fill: #f5f6f7;
-  --doc-fill-2: #f2f3f5;
-  --doc-code-bg: #f6f7f8;
-  --doc-code-inline: #334155;
+  --doc-text: var(--reader-ink);
+  --doc-text-2: var(--reader-muted);
+  --doc-text-3: var(--reader-muted);
+  --doc-line: var(--reader-line);
+  --doc-fill: var(--reader-surface);
+  --doc-fill-2: var(--reader-surface);
+  --doc-code-bg: var(--reader-surface);
+  --doc-code-inline: var(--reader-ink);
   --doc-mark: #fdf0b8;
 
-  /* 字体：系统字体栈，与飞书一致（中文优先苹方/微软雅黑） */
   font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Hiragino Sans GB',
     'Microsoft YaHei', 'Noto Sans SC', 'Segoe UI', sans-serif;
-  font-size: 15px;
-  line-height: 1.8;
+  font-size: clamp(1.0625rem, 1rem + 0.25vw, 1.125rem);
+  line-height: 1.85;
   color: var(--doc-text);
   overflow-wrap: break-word;
   font-feature-settings: 'kern' 1;
@@ -36,7 +30,7 @@
   color: var(--doc-text);
   font-weight: 600;
   line-height: 1.4;
-  letter-spacing: 0;
+  overflow-wrap: anywhere;
   scroll-margin-top: 5rem;
 }
 
@@ -46,8 +40,10 @@
 }
 
 .doc-body h2 {
-  font-size: 24px;
-  margin: 1.8em 0 0.75em;
+  font-family: var(--reader-display);
+  font-size: clamp(1.5rem, 3vw, 1.875rem);
+  font-weight: 700;
+  margin: 1.75em 0 0.65em;
 }
 
 .doc-body h3 {
@@ -68,7 +64,7 @@
 
 /* ---------- 段落与首尾间距 ---------- */
 .doc-body p {
-  margin: 0.55em 0;
+  margin: 0.9em 0;
 }
 
 .doc-body > *:first-child,
@@ -81,19 +77,19 @@
   margin-bottom: 0;
 }
 
-/* ---------- 链接：保留博客自身的克制风格（深色文字 + 细下划线） ---------- */
+/* ---------- 链接 ---------- */
 .doc-body a {
-  color: inherit;
+  color: var(--reader-accent);
+  overflow-wrap: anywhere;
   font-weight: 500;
   text-decoration: underline;
-  text-decoration-color: #c7ccd4;
   text-decoration-thickness: 1px;
   text-underline-offset: 3px;
   transition: text-decoration-color 0.15s ease;
 }
 
 .doc-body a:hover {
-  text-decoration-color: currentColor;
+  text-decoration-thickness: 2px;
 }
 
 /* ---------- 强调 ---------- */
@@ -122,7 +118,7 @@
 .doc-body blockquote {
   margin: 1.05em 0;
   padding: 0.1em 0 0.1em 16px;
-  border-left: 3px solid #d8dce2;
+  border-left: 2px solid var(--reader-accent);
   background: none;
   color: var(--doc-text-2);
   font-style: normal;
@@ -143,7 +139,7 @@
 /* ---------- 列表 ---------- */
 .doc-body ul,
 .doc-body ol {
-  margin: 0.55em 0;
+  margin: 0.9em 0;
   padding-left: 1.5em;
 }
 
@@ -385,37 +381,8 @@
   text-align: center;
 }
 
-/* ==========================================================================
-   暗色模式：中性灰阶（参考飞书文档暗色，避免纯黑底 + 纯白字的强反差）
-   ========================================================================== */
 .dark .doc-body {
-  --doc-text: #dcdcdc;
-  --doc-text-2: #a8a8a8;
-  --doc-text-3: #858585;
-  --doc-line: #333333;
-  --doc-fill: #262626;
-  --doc-fill-2: #2e2e2e;
-  --doc-code-bg: #232323;
-  --doc-code-inline: #dcdcdc;
   --doc-mark: #5c4a12;
-}
-
-/* 标题比正文亮一档，保持层级但不刺眼 */
-.dark .doc-body h1,
-.dark .doc-body h2,
-.dark .doc-body h3,
-.dark .doc-body h4,
-.dark .doc-body h5,
-.dark .doc-body h6 {
-  color: #ededed;
-}
-
-.dark .doc-body blockquote {
-  border-left-color: #3d3d3d;
-}
-
-.dark .doc-body a {
-  text-decoration-color: #4a4a4a;
 }
 
 .dark .doc-body ul[data-type='taskList'] input[type='checkbox'] {

@@ -78,7 +78,7 @@ function relatedDate(date: string) {
         <NuxtLink to="/" class="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-[var(--reader-accent)] hover:underline">
           <span aria-hidden="true">←</span> 全部文章
         </NuxtLink>
-        <h1 class="reader-display mt-4 text-[clamp(2rem,5vw,3.75rem)] font-bold leading-[1.23]">
+        <h1 class="reader-display mt-4 text-[clamp(1.5rem,1.125rem+1.75vw,2.125rem)] font-bold leading-[1.23]">
           {{ post.title }}
         </h1>
         <div class="mt-5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums text-[var(--reader-muted)]">

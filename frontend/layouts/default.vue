@@ -1,5 +1,4 @@
 <script setup lang="ts">
-const { public: site } = useRuntimeConfig()
 const mainContent = ref<HTMLElement | null>(null)
 const showBackToTop = ref(false)
 
@@ -28,13 +27,6 @@ onUnmounted(() => window.removeEventListener('scroll', updateBackToTop))
     <main ref="mainContent" tabindex="-1" class="flex-1">
       <slot />
     </main>
-
-    <footer class="reader-shell">
-      <nav aria-label="页脚导航" class="flex flex-wrap items-center gap-x-6 border-t border-[var(--reader-line)] py-4 pr-12 text-sm text-[var(--reader-muted)]">
-        <NuxtLink to="/" class="reader-footer-link [overflow-wrap:anywhere]">{{ site.siteName }}</NuxtLink>
-        <NuxtLink to="/about" class="reader-footer-link">关于</NuxtLink>
-      </nav>
-    </footer>
 
     <button
       v-if="showBackToTop"
@@ -74,33 +66,16 @@ onUnmounted(() => window.removeEventListener('scroll', updateBackToTop))
   --reader-accent: #e89984;
 }
 
-.reader-shell,
 .reader-column {
   width: 100%;
+  max-width: 51rem;
   margin-inline: auto;
   padding-inline: clamp(1.25rem, 4vw, 2.5rem);
-}
-
-.reader-shell {
-  max-width: 68rem;
-}
-
-.reader-column {
-  max-width: 51rem;
 }
 
 .reader-display {
   font-family: var(--reader-display);
   overflow-wrap: anywhere;
-}
-
-.reader-footer-link {
-  padding-block: 0.5rem;
-}
-
-.reader-footer-link:hover,
-.reader-footer-link[aria-current='page'] {
-  color: var(--reader-accent);
 }
 
 .reader-back-to-top {

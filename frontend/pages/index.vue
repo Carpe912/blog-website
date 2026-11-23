@@ -28,17 +28,6 @@ const filteredPosts = computed(() => {
   )
 })
 
-// 分页
-const PAGE_SIZE = 10
-const currentPage = ref(1)
-watch(searchQuery, () => (currentPage.value = 1))
-
-const totalPages = computed(() => Math.ceil(filteredPosts.value.length / PAGE_SIZE))
-const pagedPosts = computed(() => {
-  const start = (currentPage.value - 1) * PAGE_SIZE
-  return filteredPosts.value.slice(start, start + PAGE_SIZE)
-})
-
 function formatDate(date: string) {
   const d = new Date(date)
   const y = d.getFullYear()
@@ -49,14 +38,8 @@ function formatDate(date: string) {
 </script>
 
 <template>
-  <div class="reader-column pb-20">
-    <header class="pb-12 pt-14 sm:pb-16 sm:pt-20">
-      <div aria-hidden="true" class="mb-5 h-0.5 w-8 bg-[var(--reader-accent)]" />
-      <h1 class="reader-display text-5xl font-bold leading-tight sm:text-7xl">文章</h1>
-      <p v-if="config.public.siteDescription" class="mt-4 max-w-xl text-base leading-relaxed text-[var(--reader-muted)]">
-        {{ config.public.siteDescription }}
-      </p>
-    </header>
+  <div class="reader-column pb-20 pt-8 sm:pt-12">
+    <h1 class="sr-only">文章</h1>
 
     <section aria-label="文章列表">
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--reader-line)] pb-4">
@@ -77,8 +60,8 @@ function formatDate(date: string) {
         </label>
       </div>
 
-      <ul v-if="pagedPosts.length" class="divide-y divide-[var(--reader-line)] border-b border-[var(--reader-line)]">
-        <li v-for="post in pagedPosts" :key="post.id">
+      <ul v-if="filteredPosts.length" class="divide-y divide-[var(--reader-line)] border-b border-[var(--reader-line)]">
+        <li v-for="post in filteredPosts" :key="post.id">
           <NuxtLink
             :to="`/blog/${post.slug}`"
             class="group grid grid-cols-[minmax(0,1fr)_1.25rem] items-start gap-x-4 gap-y-2 py-6 sm:grid-cols-[6rem_minmax(0,1fr)_1.25rem] sm:gap-x-6 sm:py-8"
@@ -110,12 +93,6 @@ function formatDate(date: string) {
       <p v-else class="border-b border-[var(--reader-line)] py-16 text-center text-sm text-[var(--reader-muted)]">
         {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : '暂无文章' }}
       </p>
-
-      <nav v-if="totalPages > 1" aria-label="文章分页" class="mt-8 flex items-center justify-between gap-4 text-sm">
-        <button type="button" class="archive-page-btn" :disabled="currentPage === 1" @click="currentPage--">上一页</button>
-        <span class="tabular-nums text-[var(--reader-muted)]">{{ currentPage }} / {{ totalPages }}</span>
-        <button type="button" class="archive-page-btn" :disabled="currentPage === totalPages" @click="currentPage++">下一页</button>
-      </nav>
     </section>
   </div>
 </template>
@@ -128,15 +105,5 @@ function formatDate(date: string) {
 
 .archive-search input:focus {
   outline: none;
-}
-
-.archive-page-btn {
-  @apply min-h-10 rounded-md border px-3 transition-colors disabled:opacity-50;
-  border-color: var(--reader-line);
-}
-
-.archive-page-btn:hover:enabled {
-  color: var(--reader-accent);
-  border-color: var(--reader-accent);
 }
 </style>

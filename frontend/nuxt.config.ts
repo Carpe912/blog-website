@@ -54,7 +54,7 @@ export default defineNuxtConfig({
       htmlAttrs: { lang: 'zh-CN' },
       script: [{ src: '/theme-init.js', tagPosition: 'head' }],
       link: [
-        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' },
+        { rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg?v=2' },
         {
           rel: 'preconnect',
           href: 'https://fonts.googleapis.com',

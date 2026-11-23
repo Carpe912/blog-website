@@ -79,21 +79,21 @@
 
 /* hljs 亮色主题 token（GitHub 风格） */
 .hljs { @apply bg-white text-slate-800 dark:bg-ink-850 dark:text-ink-100; }
-.hljs-comment, .hljs-quote          { @apply text-slate-400 dark:text-ink-400 italic; }
+.hljs-comment, .hljs-quote          { @apply text-slate-600 dark:text-ink-200 italic; }
 .hljs-keyword, .hljs-selector-tag,
 .hljs-built_in, .hljs-name,
 .hljs-tag                           { @apply text-violet-600 dark:text-violet-400 font-medium; }
 .hljs-string, .hljs-attr,
 .hljs-selector-attr,
-.hljs-selector-pseudo               { @apply text-emerald-600 dark:text-emerald-400; }
+.hljs-selector-pseudo               { @apply text-emerald-700 dark:text-emerald-400; }
 .hljs-number, .hljs-literal,
 .hljs-variable, .hljs-template-variable,
-.hljs-tag .hljs-attr                { @apply text-orange-500 dark:text-orange-400; }
+.hljs-tag .hljs-attr                { @apply text-orange-700 dark:text-orange-400; }
 .hljs-type, .hljs-class .hljs-title,
-.hljs-title                         { @apply text-amber-600 dark:text-amber-400 font-semibold; }
+.hljs-title                         { @apply text-amber-700 dark:text-amber-400 font-semibold; }
 .hljs-section                       { @apply text-blue-600 dark:text-blue-400 font-bold; }
 .hljs-symbol, .hljs-bullet,
-.hljs-link, .hljs-meta              { @apply text-cyan-600 dark:text-cyan-400; }
+.hljs-link, .hljs-meta              { @apply text-cyan-700 dark:text-cyan-400; }
 .hljs-deletion                      { @apply text-red-600 bg-red-50 dark:text-red-400 dark:bg-red-950; }
 .hljs-addition                      { @apply text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950; }
 .hljs-emphasis                      { @apply italic; }

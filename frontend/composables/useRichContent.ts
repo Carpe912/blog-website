@@ -7,6 +7,21 @@
  *  3. 把 <pre><code> 包装成 .code-block-wrapper，复用代码块工具栏与复制按钮
  */
 import hljs from 'highlight.js/lib/common'
+import dockerfile from 'highlight.js/lib/languages/dockerfile'
+import http from 'highlight.js/lib/languages/http'
+import latex from 'highlight.js/lib/languages/latex'
+import nginx from 'highlight.js/lib/languages/nginx'
+
+hljs.registerLanguage('dockerfile', dockerfile)
+hljs.registerLanguage('http', http)
+hljs.registerLanguage('latex', latex)
+hljs.registerLanguage('nginx', nginx)
+
+const AUTO_LANGUAGES = [
+  'typescript', 'javascript', 'python', 'bash', 'json', 'sql', 'yaml',
+  'xml', 'css', 'java', 'go', 'rust',
+]
+const MAX_AUTO_DETECT_LENGTH = 20_000
 
 /** 语言别名 → highlight.js 语言名 */
 const LANG_ALIAS: Record<string, string> = {
@@ -49,19 +64,23 @@ function decodeEntities(html: string): string {
 }
 
 /** 用 highlight.js 生成带 hljs-* 类名的 HTML */
-function highlightCode(raw: string, rawLang: string): string {
+function highlightCode(raw: string, lang: string): string {
   // 内容里已经有 hljs 标记（编辑器保存时已高亮），直接复用
   if (/class="hljs-/.test(raw)) return raw
 
   const code = decodeEntities(raw)
-  const lang = LANG_ALIAS[rawLang.toLowerCase()] ?? rawLang.toLowerCase()
-
-  if (!lang || lang === 'plaintext' || !hljs.getLanguage(lang)) {
-    return escapeHtml(code)
-  }
-
   try {
-    return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
+    if (lang && lang !== 'plaintext' && hljs.getLanguage(lang)) {
+      return hljs.highlight(code, { language: lang, ignoreIllegals: true }).value
+    }
+
+    // 旧文章里的代码块可能没有语言。只在有足够语法特征时自动着色。
+    if (!lang && code.length <= MAX_AUTO_DETECT_LENGTH && code.trim()) {
+      const detected = hljs.highlightAuto(code, AUTO_LANGUAGES)
+      if (detected.relevance >= 2) return detected.value
+    }
+
+    return escapeHtml(code)
   } catch {
     return escapeHtml(code)
   }
@@ -98,11 +117,12 @@ export function useRichContent() {
       /<pre([^>]*)>\s*<code([^>]*)>([\s\S]*?)<\/code>\s*<\/pre>/gi,
       (_m, _preAttrs, codeAttrs, body) => {
         const langMatch = String(codeAttrs).match(/language-([\w-]+)/i)
-        const rawLang = langMatch?.[1] ?? 'plaintext'
-        const lang = rawLang.toLowerCase()
-        return `<div class="code-block-wrapper" data-lang="${lang}"><pre><code class="hljs language-${lang}">${highlightCode(
+        const rawLang = langMatch?.[1]?.toLowerCase() ?? ''
+        const lang = LANG_ALIAS[rawLang] ?? rawLang
+        const languageClass = rawLang ? ` language-${rawLang}` : ''
+        return `<div class="code-block-wrapper" data-lang="${rawLang}"><pre><code class="hljs${languageClass}">${highlightCode(
           body,
-          rawLang,
+          lang,
         )}</code></pre></div>`
       },
     )

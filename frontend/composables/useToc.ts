@@ -8,6 +8,8 @@
  * - headings：从 HTML 字符串解析出的 h2/h3 标题列表（SSR 安全）
  * - activeId：当前滚动到的标题 id（客户端 IntersectionObserver 驱动）
  */
+export const DEFAULT_TOC_WIDTH = 408
+
 export interface TocHeading {
   id: string
   text: string

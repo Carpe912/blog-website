@@ -8,7 +8,7 @@
  *  - 标题被截断时，鼠标移上去浮层显示完整文字
  *  - 宽度与折叠状态记在 localStorage，重进保持
  */
-import type { TocHeading } from '~/composables/useToc'
+import { DEFAULT_TOC_WIDTH, type TocHeading } from '~/composables/useToc'
 
 defineProps<{
   headings: TocHeading[]
@@ -18,14 +18,13 @@ defineProps<{
 /** 通知父级当前占用的宽度（折叠时为 0），用于正文让位 */
 const emit = defineEmits<{ 'update:width': [number] }>()
 
-const DEFAULT_WIDTH = 272
 const MIN_WIDTH = 120 // 拖拽允许的最小值
 const MAX_WIDTH = 480
 const COLLAPSE_THRESHOLD = 200 // 松手时低于此宽度自动折叠
 const WIDTH_KEY = 'blog-toc-width'
 const COLLAPSED_KEY = 'blog-toc-collapsed'
 
-const width = ref(DEFAULT_WIDTH)
+const width = ref(DEFAULT_TOC_WIDTH)
 const collapsed = ref(false)
 const dragging = ref(false)
 const mobileToc = ref<HTMLDetailsElement | null>(null)
@@ -90,15 +89,15 @@ function collapse() {
 }
 
 function expand() {
-  if (width.value < COLLAPSE_THRESHOLD) width.value = DEFAULT_WIDTH
+  if (width.value < COLLAPSE_THRESHOLD) width.value = DEFAULT_TOC_WIDTH
   collapsed.value = false
   localStorage.setItem(COLLAPSED_KEY, '0')
   syncWidth()
 }
 
 function resetWidth() {
-  width.value = DEFAULT_WIDTH
-  localStorage.setItem(WIDTH_KEY, String(DEFAULT_WIDTH))
+  width.value = DEFAULT_TOC_WIDTH
+  localStorage.setItem(WIDTH_KEY, String(DEFAULT_TOC_WIDTH))
 }
 
 /* ── 截断文字的完整提示 ───────────────────────────────── */

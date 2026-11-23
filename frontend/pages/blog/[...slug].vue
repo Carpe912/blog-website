@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { DEFAULT_TOC_WIDTH } from '~/composables/useToc'
+
 definePageMeta({ layout: 'default' })
 
 const route = useRoute()
@@ -55,7 +57,7 @@ const articleRef = ref<HTMLElement | null>(null)
 const { headings, activeId } = useToc(renderedContent, articleRef)
 
 // 目录栏当前占宽（折叠时为 0），由 ArticleToc 上报，正文据此让位
-const tocWidth = ref(272)
+const tocWidth = ref(DEFAULT_TOC_WIDTH)
 
 // ── 代码块复制按钮 ──────────────────────────────────────────────────────────
 useCodeCopy(articleRef)

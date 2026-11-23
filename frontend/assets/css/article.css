@@ -252,8 +252,8 @@
   border: 0;
   color: var(--doc-text);
   font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
-  font-size: 13px;
-  line-height: 1.7;
+  font-size: clamp(0.9375rem, 0.9rem + 0.2vw, 1rem);
+  line-height: 1.65;
   tab-size: 2;
 }
 
@@ -284,7 +284,7 @@
 
 .doc-body .code-lang {
   font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
+  font-size: 0.75rem;
   font-weight: 500;
   letter-spacing: 0.04em;
   color: var(--doc-text-3);
@@ -293,7 +293,7 @@
 
 .doc-body .code-copy-btn {
   padding: 2px 6px;
-  font-size: 12px;
+  font-size: 0.8125rem;
   line-height: 1.6;
   color: var(--doc-text-3);
   background: transparent;

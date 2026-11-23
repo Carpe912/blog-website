@@ -12,7 +12,7 @@
 
   font-family: var(--reader-body-font);
   font-size: clamp(1.0625rem, 1rem + 0.25vw, 1.125rem);
-  line-height: 1.85;
+  line-height: 1.7;
   color: var(--doc-text);
   overflow-wrap: break-word;
   font-feature-settings: 'kern' 1;

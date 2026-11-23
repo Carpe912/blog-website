@@ -63,7 +63,7 @@ function formatDate(date: string) {
         <p role="status" class="text-sm tabular-nums text-[var(--reader-muted)]">
           {{ error ? '文章列表' : searchQuery.trim() ? `${filteredPosts.length} 篇匹配` : `${allPosts.length} 篇文章` }}
         </p>
-        <label class="flex w-full items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56">
+        <label class="archive-search flex w-full items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56">
           <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
             <path d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
           </svg>
@@ -117,6 +117,15 @@ function formatDate(date: string) {
 </template>
 
 <style scoped>
+.archive-search:focus-within {
+  outline: 2px solid var(--reader-accent);
+  outline-offset: 2px;
+}
+
+.archive-search input:focus {
+  outline: none;
+}
+
 .archive-page-btn {
   @apply min-h-10 rounded-md border px-3 transition-colors disabled:opacity-50;
   border-color: var(--reader-line);

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 const { public: site } = useRuntimeConfig()
-const siteHeader = ref<HTMLElement | null>(null)
+const mainContent = ref<HTMLElement | null>(null)
 const showBackToTop = ref(false)
 
 function updateBackToTop() {
@@ -8,7 +8,7 @@ function updateBackToTop() {
 }
 
 function backToTop() {
-  siteHeader.value?.focus({ preventScroll: true })
+  mainContent.value?.focus({ preventScroll: true })
   window.scrollTo({
     top: 0,
     behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth',
@@ -25,27 +25,15 @@ onUnmounted(() => window.removeEventListener('scroll', updateBackToTop))
 
 <template>
   <div class="reader-site flex min-h-screen flex-col">
-    <header ref="siteHeader" tabindex="-1" class="border-b border-[var(--reader-line)]">
-      <div class="reader-shell flex min-h-16 items-center justify-between gap-4 py-3">
-        <NuxtLink to="/" class="flex min-w-0 items-center gap-3 font-semibold leading-snug">
-          <span class="reader-mark" aria-hidden="true" />
-          <span class="[overflow-wrap:anywhere]">{{ site.siteName }}</span>
-        </NuxtLink>
-        <nav aria-label="站点导航" class="flex shrink-0 items-center gap-5 text-sm sm:gap-7">
-          <NuxtLink to="/" class="reader-nav-link" exact-active-class="reader-nav-current">文章</NuxtLink>
-          <NuxtLink to="/about" class="reader-nav-link" exact-active-class="reader-nav-current">关于</NuxtLink>
-        </nav>
-      </div>
-    </header>
-
-    <main class="flex-1">
+    <main ref="mainContent" tabindex="-1" class="flex-1">
       <slot />
     </main>
 
     <footer class="reader-shell">
-      <div class="border-t border-[var(--reader-line)] py-6 text-sm text-[var(--reader-muted)]">
-        {{ site.siteName }}
-      </div>
+      <nav aria-label="页脚导航" class="flex flex-wrap items-center gap-x-6 border-t border-[var(--reader-line)] py-4 pr-12 text-sm text-[var(--reader-muted)]">
+        <NuxtLink to="/" class="reader-footer-link [overflow-wrap:anywhere]">{{ site.siteName }}</NuxtLink>
+        <NuxtLink to="/about" class="reader-footer-link">关于</NuxtLink>
+      </nav>
     </footer>
 
     <button
@@ -105,22 +93,12 @@ onUnmounted(() => window.removeEventListener('scroll', updateBackToTop))
   overflow-wrap: anywhere;
 }
 
-.reader-mark {
-  width: 12px;
-  height: 15px;
-  flex: none;
-  border: 1.5px solid var(--reader-accent);
-  border-radius: 2px 3px 3px 2px;
-  box-shadow: inset 3px 0 var(--reader-accent);
+.reader-footer-link {
+  padding-block: 0.5rem;
 }
 
-.reader-nav-link {
-  padding-block: 0.45rem;
-  color: var(--reader-muted);
-}
-
-.reader-nav-link:hover,
-.reader-nav-current {
+.reader-footer-link:hover,
+.reader-footer-link[aria-current='page'] {
   color: var(--reader-accent);
 }
 

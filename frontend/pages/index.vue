@@ -60,7 +60,9 @@ onMounted(() => {
   if (q && !searchResults.value) runSearch(q)
 })
 
-const filteredPosts = computed<any[]>(() => searchResults.value ?? allPosts.value)
+const filteredPosts = computed<any[]>(() =>
+  Array.isArray(searchResults.value) ? searchResults.value : allPosts.value,
+)
 
 function formatDate(date: string) {
   const d = new Date(date)

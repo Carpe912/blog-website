@@ -5,6 +5,7 @@ import { EmbeddingService, cosineSimilarity } from './embedding.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostDto } from './dto/query-post.dto';
+import { DEFAULT_TAG_VOCABULARY, TAG_RULES } from './tag-vocabulary';
 
 /** 去掉 HTML 标签与实体，得到纯文本 */
 function plainText(html: string): string {
@@ -475,6 +476,106 @@ export class PostsService {
     return { total: posts.length, tagged };
   }
 
+  // ── 重建标签体系（管理接口）───────────────────────────────────────────────
+  // 先让模型按当前全部文章生成一套精简词表（可合并同义/过细标签），
+  // 再逐篇按新词表重打标签，最后清理词表外且已无关联的旧标签。
+  async rebuildTags(dryRun = false) {
+    const posts = await this.prisma.post.findMany({
+      select: { id: true, title: true, excerpt: true, content: true },
+      orderBy: { id: 'asc' },
+    });
+    if (posts.length === 0) {
+      return { posts: 0, vocabulary: [], retagged: 0, pruned: 0, dryRun };
+    }
+
+    const current = await this.prisma.tag.findMany({
+      select: { name: true, _count: { select: { posts: true } } },
+      orderBy: { posts: { _count: 'desc' } },
+    });
+
+    const proposed = await this.ai.proposeVocabulary(
+      posts.map((p) => ({ title: p.title, excerpt: p.excerpt })),
+      current.map((t) => ({ name: t.name, count: t._count.posts })),
+    );
+
+    const vocabulary = this.normalizeVocabulary(proposed);
+    if (vocabulary.length === 0) {
+      return {
+        posts: posts.length,
+        vocabulary: [],
+        retagged: 0,
+        pruned: 0,
+        dryRun,
+        warning: '模型没有返回可用词表，未做改动',
+      };
+    }
+
+    if (dryRun) {
+      return {
+        posts: posts.length,
+        vocabulary,
+        current: current.map((t) => `${t.name}(${t._count.posts})`),
+        dryRun: true,
+      };
+    }
+
+    // 先把新词表的标签都建出来，避免逐篇重复查
+    for (const name of vocabulary) {
+      await this.ensureTag(name);
+    }
+
+    const failures: number[] = [];
+    let retagged = 0;
+
+    for (const post of posts) {
+      try {
+        const raw = await this.ai.generateTags(post.title, post.content, vocabulary);
+        let tags = this.canonicalizeTags(raw, vocabulary);
+        if (tags.length === 0) {
+          tags = this.fallbackTags(post.title, post.content, vocabulary);
+        }
+        if (tags.length === 0) {
+          failures.push(post.id);
+          continue;
+        }
+        await this.applyTags(post.id, tags);
+        retagged += 1;
+      } catch (err) {
+        this.logger.error(`文章 #${post.id} 重打标签失败`, err);
+        failures.push(post.id);
+      }
+    }
+
+    // 只删「已不属于新词表且不再关联任何文章」的标签，避免误删还在用的
+    const pruned = await this.prisma.tag.deleteMany({
+      where: { name: { notIn: vocabulary }, posts: { none: {} } },
+    });
+
+    this.invalidateCorpusCache();
+    return {
+      posts: posts.length,
+      vocabulary,
+      retagged,
+      pruned: pruned.count,
+      failures,
+      dryRun: false,
+    };
+  }
+
+  /** 词表归一化：去重、英文小写，最多 15 个 */
+  private normalizeVocabulary(raw: string[]): string[] {
+    const out: string[] = [];
+    for (const item of raw) {
+      const name = normalizeTagName(String(item));
+      if (!name) continue;
+      const normalized = /[\u4e00-\u9fa5]/.test(name) ? name : name.toLowerCase();
+      if (out.some((n) => n.toLowerCase() === normalized.toLowerCase())) continue;
+      out.push(normalized);
+      if (out.length >= 15) break;
+    }
+    return out;
+  }
+
   // ── 上一篇 / 下一篇 ───────────────────────────────────────────────────────
   async findAdjacentBySlug(slug: string) {
     const post = await this.prisma.post.findUnique({
@@ -717,43 +818,67 @@ export class PostsService {
   // ── 私有：标签生成与落库 ─────────────────────────────────────────────────
   //
   // 标签完全由正文推导，接口不接收标签参数：
-  //   1. 取站点已有标签（按使用次数倒序前 40 个）交给模型，优先复用同义写法
-  //   2. 模型给出 3~5 个标签 → 归一化、去重、限制数量
-  //   3. 按名称大小写不敏感地复用已有 Tag，缺的补建，再重建该文的关联
+  //   1. 词表取自数据库现存的标签（按使用次数排序）；空库时用默认词表
+  //   2. 模型只能从词表里挑 2~3 个，不再自造标签
+  //   3. 模型不可用时按关键词规则兜底，结果同样压在词表内
+  //   4. 需要合并/精简标签时，走 rebuildTags 重建词表并逐篇重打
   private async proposeTags(title: string, content: string): Promise<string[]> {
-    let existing: string[] = [];
+    const vocabulary = await this.loadVocabulary();
+    const raw = await this.ai.generateTags(title, content, vocabulary);
+    const picked = this.canonicalizeTags(raw, vocabulary);
+    if (picked.length > 0) return picked;
+
+    // 模型不可用或输出不在词表内：用关键词规则兜底，保证标签不跑偏
+    return this.fallbackTags(title, content, vocabulary);
+  }
+
+  /** 当前词表：数据库里的标签（含暂时没用到的），空库时用默认词表 */
+  private async loadVocabulary(): Promise<string[]> {
     try {
       const rows = await this.prisma.tag.findMany({
         select: { name: true },
         orderBy: { posts: { _count: 'desc' } },
-        take: 40,
+        take: 120,
       });
-      existing = rows.map((r) => r.name);
+      const names = rows.map((r) => r.name);
+      return names.length > 0 ? names : [...DEFAULT_TAG_VOCABULARY];
     } catch {
-      // 标签表尚未建立时仍然生成，只是无法复用已有标签
+      return [...DEFAULT_TAG_VOCABULARY];
     }
-
-    const raw = await this.ai.generateTags(title, content, existing);
-    return this.normalizeTagNames(raw);
   }
 
-  private normalizeTagNames(raw: string[]): string[] {
-    const names: string[] = [];
-    const seen = new Set<string>();
+  /** 把模型输出对齐到词表原词（大小写不敏感），去重并限制 3 个 */
+  private canonicalizeTags(raw: string[], vocabulary: string[]): string[] {
+    const map = new Map(vocabulary.map((name) => [name.toLowerCase(), name]));
+    const out: string[] = [];
 
     for (const item of raw) {
-      const name = normalizeTagName(item);
-      if (!name) continue;
-      // 英文标签统一小写（DeepSeek → deepseek），中文保持原样
-      const normalized = /[\u4e00-\u9fa5]/.test(name) ? name : name.toLowerCase();
-      const key = normalized.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      names.push(normalized);
-      if (names.length >= 5) break;
+      const key = normalizeTagName(item).toLowerCase();
+      const hit = map.get(key);
+      if (!hit || out.includes(hit)) continue;
+      out.push(hit);
+      if (out.length >= 3) break;
     }
 
-    return names;
+    return out;
+  }
+
+  /** 关键词兜底：按规则命中，只保留词表里有的标签 */
+  private fallbackTags(title: string, content: string, vocabulary: string[]): string[] {
+    const text = `${title}\n${plainText(content).slice(0, 1500)}`;
+    const allowed = new Set(vocabulary.map((n) => n.toLowerCase()));
+    const out: string[] = [];
+
+    for (const rule of TAG_RULES) {
+      if (!rule.test.test(text)) continue;
+      for (const name of rule.tags) {
+        if (!allowed.has(name.toLowerCase()) || out.includes(name)) continue;
+        out.push(name);
+        if (out.length >= 3) return out;
+      }
+    }
+
+    return out;
   }
 
   /** 生成标签并写入关联，返回实际落库的标签 */

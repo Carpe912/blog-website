@@ -81,6 +81,13 @@ export class PostsController {
     return this.postsService.backfillTags(Number(limit) || 50);
   }
 
+  // 重建标签体系：按全部文章重生成词表并逐篇重打标签
+  // dryRun=true 只返回模型提议的词表，不写库
+  @Post('rebuild-tags')
+  rebuildTags(@Query('dryRun') dryRun?: string) {
+    return this.postsService.rebuildTags(dryRun === 'true' || dryRun === '1');
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseIntPipe) id: number) {

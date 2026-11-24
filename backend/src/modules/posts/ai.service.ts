@@ -10,6 +10,7 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { TAG_HINTS } from './tag-vocabulary';
 
 @Injectable()
 export class AiService {
@@ -101,42 +102,40 @@ export class AiService {
   }
 
   /**
-   * 根据标题与正文生成文章标签
-   * @param existing 站点已有标签，命中同义时直接复用，避免同义标签泛滥
-   * @returns 3~5 个标签，失败时返回空数组
+   * 从给定词表中为文章挑选标签
+   * @param vocabulary 受控词表（数据库里现存的标签，或刚重建出来的词表）
+   * @returns 2~3 个标签，失败时返回空数组
    */
   async generateTags(
     title: string,
     content: string,
-    existing: string[] = [],
+    vocabulary: string[],
   ): Promise<string[]> {
     const plain = this.toPlainText(content).slice(0, 3000);
-    if (!plain) return [];
+    if (!plain || vocabulary.length === 0) return [];
 
-    const reuse = existing
-      .filter((t) => typeof t === 'string' && t.trim())
-      .slice(0, 40)
-      .join('、');
+    const list = vocabulary
+      .map((name) => `- ${name}${TAG_HINTS[name] ? `：${TAG_HINTS[name]}` : ''}`)
+      .join('\n');
 
-    const prompt = `请给下面这篇文章打 3 到 5 个标签，用于博客归档与筛选。
+    const prompt = `请为下面这篇文章，从「固定标签」中选 2 到 3 个最贴切的标签。
+
+固定标签（只能从中选，不得新增、不得改写）：
+${list}
 
 要求：
-- 标签是这篇文章真正在讲的主题或技术名，例如 deepseek、harness、cordis、prisma、语义检索
-- 每个标签 1 到 3 个词，尽量简短（不超过 12 个字）
-- 英文标签全部小写，中文标签保持原样；不要加 # 号，不要标点符号
-- 只保留贯穿全文的核心主题，不要罗列文中顺带提到的名词
-- 优先复用「已有标签」：语义相同就沿用已有写法，不要造近义新标签
+- 只输出固定标签里的原词
+- 选 2 到 3 个，按相关度从高到低
+- 概括全文主线，不要因为文中顺带提到就选
 - 直接返回 JSON 数组，不要任何解释或 markdown
-
-已有标签（可复用）：${reuse || '（暂无）'}
 
 文章标题：${title}
 文章内容：${plain}
 
-返回格式示例：["deepseek", "harness", "上下文管理"]`;
+返回格式示例：["deepseek", "harness"]`;
 
     try {
-      const text = await this.chat(prompt, 160);
+      const text = await this.chat(prompt, 120);
       const match = text.match(/\[[\s\S]*\]/);
       if (!match) return [];
 
@@ -146,9 +145,64 @@ export class AiService {
       return tags
         .filter((t) => typeof t === 'string' && t.trim().length > 0)
         .map((t) => (t as string).trim())
-        .slice(0, 6);
+        .slice(0, 3);
     } catch (err) {
       this.logger.error('AI 标签生成失败', err);
+      return [];
+    }
+  }
+
+  /**
+   * 按全部文章重新生成一套精简词表（可合并同义/过细标签）
+   * @param posts 全部文章的标题与摘要
+   * @param currentTags 现有标签及使用次数，作为合并依据
+   */
+  async proposeVocabulary(
+    posts: { title: string; excerpt?: string | null }[],
+    currentTags: { name: string; count: number }[],
+  ): Promise<string[]> {
+    if (posts.length === 0) return [];
+
+    const titles = posts
+      .map((p, i) => `${i + 1}. ${p.title}${p.excerpt ? `（${p.excerpt.slice(0, 40)}）` : ''}`)
+      .join('\n')
+      .slice(0, 8000);
+    const current =
+      currentTags
+        .filter((t) => t.count > 0)
+        .map((t) => `${t.name}(${t.count})`)
+        .join('、') || '（暂无）';
+
+    const prompt = `你在维护一个技术博客的标签体系。请根据全部文章，给出一套精简、稳定的标签词表。
+
+要求：
+- 输出 8 到 15 个标签，每个 2 到 12 个字
+- 标签要「宽」：一个标签能覆盖多篇文章，不要为单篇文章造词
+- 优先复用「现有标签」中次数多的；同义或过于细碎的合并成一个更宽的标签
+- 英文标签小写，中文保持原样，不要标点
+- 只返回 JSON 数组，不要解释
+
+现有标签（使用次数）：${current}
+
+文章标题：
+${titles}
+
+返回示例：["deepseek", "harness", "源码解析", "agent工程", "javascript", "浏览器"]`;
+
+    try {
+      const text = await this.chat(prompt, 300);
+      const match = text.match(/\[[\s\S]*\]/);
+      if (!match) return [];
+
+      const tags = JSON.parse(match[0]) as unknown[];
+      if (!Array.isArray(tags)) return [];
+
+      return tags
+        .filter((t) => typeof t === 'string' && t.trim().length > 0)
+        .map((t) => (t as string).trim())
+        .slice(0, 15);
+    } catch (err) {
+      this.logger.error('AI 词表生成失败', err);
       return [];
     }
   }

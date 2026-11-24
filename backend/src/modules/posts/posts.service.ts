@@ -178,28 +178,36 @@ export class PostsService {
 
   // ── 语义搜索：搜「cordis」这类概念，而不只是字面包含 ─────────────────────
   //
-  // 收严后的口径（宁缺毋滥）：
-  //   放行条件（满足其一）：
-  //     a. 标题里就有这个词
-  //     b. 命中该文章的 AI 关键词（说明它就是讲这个的）
-  //     c. 摘要里有这个词，且语义相似度 >= 0.45
-  //     d. 只在正文出现过，且语义相似度 >= 0.55（避免擦边提及也算命中）
-  //     e. 语义相似度 >= 0.60（没写这个词，但确实在讲同一件事）
-  //   其余一律不返回；limit 默认 12 条。
+  // 收严后的口径（宁缺毋滥），放行条件满足其一即可：
+  //   a. 标题里有这个词（最确定）
+  //   b. 命中该文的 AI 关键词，且该词不是"泛词" —— 泛词指出现在超过 25% 文章里的术语
+  //      （如 Cordis 这种全站都在提的概念，光靠关键词命中说明不了主题）
+  //      非泛词还要求语义相似度 >= 0.4，或查询本身是长短语（如 "Tool Result Pruner"）
+  //   c. 摘要里有这个词，且语义相似度 >= 0.45
+  //   d. 语义相似度 >= 0.62（没写这个词，但确实在讲同一件事）
+  // 只在正文里擦边提到的、语义分数不够的，一律不返回。
   async searchByQuery(rawQuery: string, limit = 12) {
     const query = normalizeQuery(rawQuery);
     if (!query) return { data: [], meta: { total: 0, query: '', semantic: false } };
 
     const corpus = await this.getCorpus();
     const q = query.toLowerCase();
+    const total = corpus.length || 1;
+    // 查询本身是长短语时，关键词命中就足够有说服力（"Tool Result Pruner" 这类）
+    const isPhraseQuery = /\s/.test(q) && q.length >= 8;
+
+    // 关键词的文档频率：用于识别"全站都在提"的泛词
+    const kwDf = new Map<string, number>();
+    for (const p of corpus) {
+      const seen = new Set(((p.aiKeywords ?? []) as string[]).map((k) => String(k).toLowerCase()));
+      for (const k of seen) kwDf.set(k, (kwDf.get(k) ?? 0) + 1);
+    }
+    const kwIsGeneric = (kwDf.get(q) ?? 0) / total > 0.25;
 
     const matches = corpus.map((p) => {
-      const title = String(p.title ?? '').toLowerCase();
-      const excerpt = String(p.excerpt ?? '').toLowerCase();
-      const inTitle = title.includes(q);
-      const inExcerpt = excerpt.includes(q);
+      const inTitle = String(p.title ?? '').toLowerCase().includes(q);
+      const inExcerpt = String(p.excerpt ?? '').toLowerCase().includes(q);
       const inBody = plainText(p.content).toLowerCase().includes(q);
-      // AI 关键词本身就是术语，命中即说明该文主题对得上
       const inKeywords = ((p.aiKeywords ?? []) as string[]).some((k) => {
         const kw = String(k).toLowerCase();
         return kw === q || kw.includes(q) || (kw.length >= 4 && q.includes(kw));
@@ -222,15 +230,17 @@ export class PostsService {
     const scored = matches.map((item, i) => {
       const cos = queryVec && vectors[i] ? cosineSimilarity(queryVec, vectors[i]!) : 0;
 
+      const kwPass =
+        item.inKeywords && !kwIsGeneric && (cos >= 0.4 || isPhraseQuery);
+
       const passed =
         item.inTitle ||
-        item.inKeywords ||
+        kwPass ||
         (item.inExcerpt && cos >= 0.45) ||
-        (item.inBody && cos >= 0.55) ||
-        cos >= 0.6;
+        cos >= 0.62;
 
       // 命中位置越"显眼"，加分越多
-      const boost = item.inTitle ? 0.3 : item.inKeywords ? 0.2 : item.inExcerpt ? 0.12 : item.inBody ? 0.05 : 0;
+      const boost = item.inTitle ? 0.3 : kwPass ? 0.2 : item.inExcerpt ? 0.12 : item.inBody ? 0.05 : 0;
       return { post: item.post, cos, passed, score: cos + boost };
     });
 

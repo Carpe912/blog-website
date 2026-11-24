@@ -178,25 +178,36 @@ export class PostsService {
 
   // ── 语义搜索：搜「cordis」这类概念，而不只是字面包含 ─────────────────────
   //
-  // 打分口径：
-  //   1. 字面命中（标题/摘要/正文）—— 最确定的信号，直接加分
-  //   2. 查询与文章的向量余弦相似度 —— 负责"没写这个词但讲的是这件事"
-  // 只保留 0.45 以上的语义相似度或字面命中的结果，其余视为不相关（宁缺毋滥）。
-  async searchByQuery(rawQuery: string, limit = 20) {
+  // 收严后的口径（宁缺毋滥）：
+  //   放行条件（满足其一）：
+  //     a. 标题里就有这个词
+  //     b. 命中该文章的 AI 关键词（说明它就是讲这个的）
+  //     c. 摘要里有这个词，且语义相似度 >= 0.45
+  //     d. 只在正文出现过，且语义相似度 >= 0.55（避免擦边提及也算命中）
+  //     e. 语义相似度 >= 0.60（没写这个词，但确实在讲同一件事）
+  //   其余一律不返回；limit 默认 12 条。
+  async searchByQuery(rawQuery: string, limit = 12) {
     const query = normalizeQuery(rawQuery);
     if (!query) return { data: [], meta: { total: 0, query: '', semantic: false } };
 
     const corpus = await this.getCorpus();
     const q = query.toLowerCase();
 
-    const literal = corpus.map((p) => {
-      const inTitle = String(p.title ?? '').toLowerCase().includes(q);
-      const inExcerpt = String(p.excerpt ?? '').toLowerCase().includes(q);
+    const matches = corpus.map((p) => {
+      const title = String(p.title ?? '').toLowerCase();
+      const excerpt = String(p.excerpt ?? '').toLowerCase();
+      const inTitle = title.includes(q);
+      const inExcerpt = excerpt.includes(q);
       const inBody = plainText(p.content).toLowerCase().includes(q);
-      return { post: p, inTitle, inExcerpt, inBody };
+      // AI 关键词本身就是术语，命中即说明该文主题对得上
+      const inKeywords = ((p.aiKeywords ?? []) as string[]).some((k) => {
+        const kw = String(k).toLowerCase();
+        return kw === q || kw.includes(q) || (kw.length >= 4 && q.includes(kw));
+      });
+      return { post: p, inTitle, inExcerpt, inBody, inKeywords };
     });
 
-    // 语义分：向量不可用时全部为 0，只靠字面命中
+    // 语义分：向量不可用时全部为 0，只靠字面/关键词命中
     let vectors: (number[] | null)[] = [];
     let queryVec: number[] | null = null;
     if (this.embedding.enabled) {
@@ -208,16 +219,23 @@ export class PostsService {
       vectors = all.slice(1);
     }
 
-    const scored = literal.map((item, i) => {
+    const scored = matches.map((item, i) => {
       const cos = queryVec && vectors[i] ? cosineSimilarity(queryVec, vectors[i]!) : 0;
-      const literalHit = item.inTitle || item.inExcerpt || item.inBody;
-      // 字面命中权重更高；只出现在正文里的命中权重低一些，避免擦边字面词压过语义匹配
-      const boost = item.inTitle ? 0.3 : item.inExcerpt ? 0.12 : item.inBody ? 0.05 : 0;
-      return { post: item.post, cos, literalHit, score: cos + boost };
+
+      const passed =
+        item.inTitle ||
+        item.inKeywords ||
+        (item.inExcerpt && cos >= 0.45) ||
+        (item.inBody && cos >= 0.55) ||
+        cos >= 0.6;
+
+      // 命中位置越"显眼"，加分越多
+      const boost = item.inTitle ? 0.3 : item.inKeywords ? 0.2 : item.inExcerpt ? 0.12 : item.inBody ? 0.05 : 0;
+      return { post: item.post, cos, passed, score: cos + boost };
     });
 
     const kept = scored
-      .filter((s) => s.literalHit || s.cos >= 0.45)
+      .filter((s) => s.passed)
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
 

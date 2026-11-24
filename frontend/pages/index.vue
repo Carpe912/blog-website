@@ -15,7 +15,14 @@ const { data: postsData, error } = await useAsyncData('all-posts', () =>
   postsApi.list({ published: 'true', limit: 1000 }),
 )
 
-const allPosts = computed<any[]>(() => (postsData.value as any)?.data ?? [])
+const allPosts = computed<any[]>(() => {
+  const list = ((postsData.value as any)?.data ?? []) as any[]
+  // 列表统一按创建时间倒序，避免接口排序变化导致顺序不稳
+  return [...list].sort(
+    (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  )
+})
 
 // 搜索
 const searchQuery = useState('blog-search', () => '')
@@ -67,10 +74,10 @@ function formatDate(date: string) {
             class="group grid grid-cols-[minmax(0,1fr)_1.25rem] items-start gap-x-4 gap-y-2 py-6 sm:grid-cols-[6rem_minmax(0,1fr)_1.25rem] sm:gap-x-6 sm:py-8"
           >
             <time
-              :datetime="post.publishedAt || post.createdAt"
+              :datetime="post.createdAt"
               class="col-span-2 pt-0.5 text-[13px] tabular-nums text-[var(--reader-muted)] sm:col-span-1 sm:pt-1.5"
             >
-              {{ formatDate(post.publishedAt || post.createdAt) }}
+              {{ formatDate(post.createdAt) }}
             </time>
             <div class="min-w-0">
               <h2 class="reader-display text-xl font-bold leading-snug group-hover:text-[var(--reader-accent)] sm:text-2xl">

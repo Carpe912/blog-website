@@ -64,17 +64,6 @@ onMounted(() => {
 // 标签随文章接口一起返回，直接按全量列表聚合，无需额外请求
 const activeTags = useState<string[]>('blog-tags', () => [])
 
-// 侧栏默认折叠；用户手动展开过就记在本机，下次保持
-const tagsOpen = ref(false)
-onMounted(() => {
-  tagsOpen.value = localStorage.getItem('blog-tags-open') === '1'
-})
-
-function toggleTags() {
-  tagsOpen.value = !tagsOpen.value
-  localStorage.setItem('blog-tags-open', tagsOpen.value ? '1' : '0')
-}
-
 const allTags = computed(() => {
   const map = new Map<string, number>()
   for (const post of allPosts.value) {
@@ -129,8 +118,8 @@ function formatDate(date: string) {
 </script>
 
 <template>
-  <!-- 展开标签栏时给左侧留位置，折叠状态正文保持居中 -->
-  <div :class="tagsOpen ? 'xl:pl-60' : null">
+  <!-- 左侧标签栏常驻，正文给它让出一栏宽度 -->
+  <div class="xl:pl-60">
     <div class="reader-column pb-20 pt-8 sm:pt-12">
       <h1 class="sr-only">文章</h1>
 
@@ -222,6 +211,27 @@ function formatDate(date: string) {
                   </NuxtLink>
                 </h2>
 
+                <!-- 标签紧跟标题，z-10 保证能盖住上面的整行链接 -->
+                <div
+                  v-if="post.tags?.length"
+                  class="tag-text relative z-10 mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px] leading-5"
+                  aria-label="文章标签"
+                >
+                  <button
+                    v-for="tag in post.tags"
+                    :key="tag.id"
+                    type="button"
+                    class="transition-colors"
+                    :class="activeTags.includes(tag.name)
+                      ? 'text-[var(--reader-accent)]'
+                      : 'text-[var(--reader-muted)] hover:text-[var(--reader-accent)]'"
+                    :aria-pressed="activeTags.includes(tag.name)"
+                    @click="toggleTag(tag.name)"
+                  >
+                    #{{ tag.name }}
+                  </button>
+                </div>
+
                 <p
                   v-if="post.excerpt"
                   :title="post.excerpt"
@@ -242,38 +252,13 @@ function formatDate(date: string) {
       </section>
     </div>
 
-    <!-- 桌面端：左侧标签栏，默认折叠，点左边缘的「标签」展开 -->
-    <button
-      v-if="allTags.length && !tagsOpen"
-      type="button"
-      class="tag-text fixed left-0 top-24 z-30 hidden h-16 w-6 items-center justify-center rounded-r-md border border-l-0 border-[var(--reader-line)] bg-[var(--reader-paper)] text-[var(--reader-muted)] transition-colors hover:text-[var(--reader-accent)] xl:flex"
-      title="展开标签"
-      aria-label="展开标签"
-      @click="toggleTags"
-    >
-      <span class="tag-tab-text text-[13px]">标签</span>
-    </button>
-
+    <!-- 桌面端：左侧标签栏常驻，不折叠 -->
     <aside
-      v-if="allTags.length && tagsOpen"
+      v-if="allTags.length"
       aria-label="标签筛选"
       class="tag-text fixed bottom-6 left-0 top-12 z-30 hidden w-60 overflow-y-auto border-r border-[var(--reader-line)] bg-[var(--reader-paper)] px-5 py-2 xl:block"
     >
-      <div class="mb-3 flex items-center justify-between">
-        <p class="text-[15px] font-semibold text-[var(--reader-ink)]">标签</p>
-        <button
-          type="button"
-          class="-mr-2 flex h-6 w-6 items-center justify-center rounded text-[var(--reader-muted)] transition-colors hover:bg-[var(--reader-surface)] hover:text-[var(--reader-accent)]"
-          title="收起标签"
-          aria-label="收起标签"
-          @click="toggleTags"
-        >
-          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round" stroke-linejoin="round">
-            <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
-          </svg>
-        </button>
-      </div>
+      <p class="mb-3 text-[15px] font-semibold text-[var(--reader-ink)]">标签</p>
       <nav aria-label="按标签筛选文章" class="grid gap-0.5">
         <button
           type="button"
@@ -320,11 +305,5 @@ function formatDate(date: string) {
 /* 标签统一用宋体，与站点标题一致 */
 .tag-text {
   font-family: var(--reader-display);
-}
-
-/* 折叠状态左边缘的竖排「标签」 */
-.tag-tab-text {
-  writing-mode: vertical-rl;
-  letter-spacing: 0.18em;
 }
 </style>

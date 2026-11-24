@@ -60,9 +60,55 @@ onMounted(() => {
   if (q && !searchResults.value) runSearch(q)
 })
 
-const filteredPosts = computed<any[]>(() =>
-  Array.isArray(searchResults.value) ? searchResults.value : allPosts.value,
-)
+// ── 标签筛选 ───────────────────────────────────────────────────────────────
+// 标签随文章接口一起返回，直接按全量列表聚合，无需额外请求
+const activeTag = useState('blog-tag', () => '')
+const tagExpanded = ref(false)
+
+const allTags = computed(() => {
+  const map = new Map<string, number>()
+  for (const post of allPosts.value) {
+    for (const tag of post.tags ?? []) {
+      map.set(tag.name, (map.get(tag.name) ?? 0) + 1)
+    }
+  }
+  return [...map.entries()]
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+})
+
+// 默认只露前 12 个，避免标签墙压住列表；选中的标签即使被折叠也要显示
+const visibleTags = computed(() => {
+  if (tagExpanded.value) return allTags.value
+  const top = allTags.value.slice(0, 12)
+  if (activeTag.value && !top.some((t) => t.name === activeTag.value)) {
+    const active = allTags.value.find((t) => t.name === activeTag.value)
+    if (active) return [...top, active]
+  }
+  return top
+})
+
+const filteredPosts = computed<any[]>(() => {
+  // 搜索结果不带 tags，按 id 从全量列表补齐，保证标签筛选对搜索结果同样生效
+  const tagsById = new Map(allPosts.value.map((p: any) => [p.id, p.tags ?? []]))
+  const source = (Array.isArray(searchResults.value) ? searchResults.value : allPosts.value).map(
+    (p: any) => ({ ...p, tags: p.tags?.length ? p.tags : tagsById.get(p.id) ?? [] }),
+  )
+  if (!activeTag.value) return source
+  return source.filter((p: any) => p.tags.some((t: any) => t.name === activeTag.value))
+})
+
+function toggleTag(name: string) {
+  activeTag.value = activeTag.value === name ? '' : name
+}
+
+const statusText = computed(() => {
+  if (searchQuery.value.trim()) {
+    return searching.value ? '搜索中…' : `${filteredPosts.value.length} 篇匹配`
+  }
+  if (activeTag.value) return `#${activeTag.value} · ${filteredPosts.value.length} 篇`
+  return `${allPosts.value.length} 篇文章`
+})
 
 function formatDate(date: string) {
   const d = new Date(date)
@@ -80,7 +126,7 @@ function formatDate(date: string) {
     <section aria-label="文章列表">
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--reader-line)] pb-4">
         <p role="status" class="text-sm tabular-nums text-[var(--reader-muted)]">
-          {{ error ? '文章列表' : searchQuery.trim() ? (searching ? '搜索中…' : `${filteredPosts.length} 篇匹配`) : `${allPosts.length} 篇文章` }}
+          {{ error ? '文章列表' : statusText }}
         </p>
         <label class="archive-search flex w-full items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56">
           <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
@@ -94,6 +140,44 @@ function formatDate(date: string) {
             class="min-h-10 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-[var(--reader-ink)] placeholder:text-[var(--reader-muted)]"
           />
         </label>
+      </div>
+
+      <div
+        v-if="allTags.length"
+        class="flex flex-wrap items-baseline gap-x-4 gap-y-1.5 border-b border-[var(--reader-line)] py-3 text-[13px]"
+      >
+        <button
+          type="button"
+          class="py-0.5 transition-colors"
+          :class="activeTag
+            ? 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'
+            : 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'"
+          :aria-pressed="!activeTag"
+          @click="activeTag = ''"
+        >
+          全部
+        </button>
+        <button
+          v-for="tag in visibleTags"
+          :key="tag.name"
+          type="button"
+          class="py-0.5 transition-colors"
+          :class="activeTag === tag.name
+            ? 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'
+            : 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'"
+          :aria-pressed="activeTag === tag.name"
+          @click="toggleTag(tag.name)"
+        >
+          #{{ tag.name }}<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ tag.count }}</span>
+        </button>
+        <button
+          v-if="allTags.length > 12"
+          type="button"
+          class="py-0.5 text-[var(--reader-accent)] hover:underline"
+          @click="tagExpanded = !tagExpanded"
+        >
+          {{ tagExpanded ? '收起' : `全部 ${allTags.length} 个标签` }}
+        </button>
       </div>
 
       <ul v-if="filteredPosts.length" class="divide-y divide-[var(--reader-line)] border-b border-[var(--reader-line)]">
@@ -127,7 +211,7 @@ function formatDate(date: string) {
       </ul>
 
       <p v-else class="border-b border-[var(--reader-line)] py-16 text-center text-sm text-[var(--reader-muted)]">
-        {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : '暂无文章' }}
+        {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : activeTag ? '该标签下暂无文章' : '暂无文章' }}
       </p>
     </section>
   </div>

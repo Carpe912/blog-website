@@ -24,16 +24,43 @@ const allPosts = computed<any[]>(() => {
   )
 })
 
-// 搜索
+// 搜索：走接口的语义搜索，能按「概念」找文章（如搜 cordis 会带出讲 Cordis 的几篇）
 const searchQuery = useState('blog-search', () => '')
-const filteredPosts = computed(() => {
-  const q = searchQuery.value.trim().toLowerCase()
-  if (!q) return allPosts.value
-  return allPosts.value.filter(
-    (p: any) =>
-      p.title?.toLowerCase().includes(q) || p.excerpt?.toLowerCase().includes(q),
-  )
+const searchResults = ref<any[] | null>(null)
+const searching = ref(false)
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+async function runSearch(q: string) {
+  searching.value = true
+  try {
+    searchResults.value = await postsApi.search(q)
+  } catch {
+    searchResults.value = []
+  } finally {
+    searching.value = false
+  }
+}
+
+watch(searchQuery, (raw) => {
+  const q = raw.trim()
+  if (searchTimer) clearTimeout(searchTimer)
+  if (!q) {
+    searchResults.value = null
+    searching.value = false
+    return
+  }
+  // 输入时防抖，避免每敲一个字就请求一次
+  searching.value = true
+  searchTimer = setTimeout(() => runSearch(q), 250)
 })
+
+// 从文章页返回时搜索词还在，需要补一次请求
+onMounted(() => {
+  const q = searchQuery.value.trim()
+  if (q && !searchResults.value) runSearch(q)
+})
+
+const filteredPosts = computed<any[]>(() => searchResults.value ?? allPosts.value)
 
 function formatDate(date: string) {
   const d = new Date(date)
@@ -51,7 +78,7 @@ function formatDate(date: string) {
     <section aria-label="文章列表">
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--reader-line)] pb-4">
         <p role="status" class="text-sm tabular-nums text-[var(--reader-muted)]">
-          {{ error ? '文章列表' : searchQuery.trim() ? `${filteredPosts.length} 篇匹配` : `${allPosts.length} 篇文章` }}
+          {{ error ? '文章列表' : searchQuery.trim() ? (searching ? '搜索中…' : `${filteredPosts.length} 篇匹配`) : `${allPosts.length} 篇文章` }}
         </p>
         <label class="archive-search flex w-full items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56">
           <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">

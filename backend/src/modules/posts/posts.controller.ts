@@ -40,6 +40,15 @@ export class PostsController {
     return this.postsService.findRelatedBySlug(slug);
   }
 
+  // 注意：必须放在 @Get(':id') 之前，否则 search 会被当成 id 解析
+  @Get('search')
+  search(@Query('q') q: string, @Query('limit') limit?: string) {
+    return this.postsService.searchByQuery(
+      q ?? '',
+      Math.min(Number(limit) || 20, 50),
+    );
+  }
+
   @Get(':id')
   findOne(@Param('id', ParseIntPipe) id: number) {
     return this.postsService.findOne(id);

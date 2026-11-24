@@ -25,6 +25,10 @@ export const usePostsApi = () => ({
   list: (params?: Record<string, any>) =>
     apiFetch<any>('/posts?' + new URLSearchParams(params).toString()),
   get: (id: number) => apiFetch<any>(`/posts/${id}`),
+  search: (q: string, limit = 20) =>
+    apiFetch<Array<any>>(
+      `/posts/search?` + new URLSearchParams({ q, limit: String(limit) }).toString()
+    ),
   getBySlug: (slug: string) => apiFetch<any>(`/posts/slug/${slug}`),
   getAdjacentBySlug: (slug: string) =>
     apiFetch<{ prev: { title: string; slug: string } | null; next: { title: string; slug: string } | null }>(

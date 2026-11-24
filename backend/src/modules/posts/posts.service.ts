@@ -67,8 +67,21 @@ const TOPIC_STOP_WORDS = new Set([
   '可以',
 ]);
 
-/** 从标题里切出候选术语：按标点和空格切段，再补上英文技术名词 */
-function buildTopicTerms(post: any): Set<string> {
+/**
+ * 搜索词归一化：去掉口语化的尾巴
+ * 「cordis相关的文章」→「cordis」
+ */
+function normalizeQuery(raw: string): string {
+  return (raw ?? '')
+    .trim()
+    .replace(/[?？!！。.]/g, '')
+    .replace(/(相关|有关|类似|关于)?的?(文章|内容|博客|东西|资料)?$/g, '')
+    .replace(/^(搜索|搜|查找|找|查)(一下|下)?/g, '')
+    .replace(/^(关于|有关|类似|跟|和)\s*/g, '')
+    .trim();
+}
+
+/** 从标题里切出候选术语：按标点和空格切段，再补上英文技术名词 */function buildTopicTerms(post: any): Set<string> {
   const terms = new Set<string>();
 
   const push = (raw: string) => {
@@ -161,6 +174,60 @@ export class PostsService {
     });
     if (!post) throw new NotFoundException(`文章 #${id} 不存在`);
     return this.formatPost(post);
+  }
+
+  // ── 语义搜索：搜「cordis」这类概念，而不只是字面包含 ─────────────────────
+  //
+  // 打分口径：
+  //   1. 字面命中（标题/摘要/正文）—— 最确定的信号，直接加分
+  //   2. 查询与文章的向量余弦相似度 —— 负责"没写这个词但讲的是这件事"
+  // 只保留 0.45 以上的语义相似度或字面命中的结果，其余视为不相关（宁缺毋滥）。
+  async searchByQuery(rawQuery: string, limit = 20) {
+    const query = normalizeQuery(rawQuery);
+    if (!query) return { data: [], meta: { total: 0, query: '', semantic: false } };
+
+    const corpus = await this.getCorpus();
+    const q = query.toLowerCase();
+
+    const literal = corpus.map((p) => {
+      const inTitle = String(p.title ?? '').toLowerCase().includes(q);
+      const inExcerpt = String(p.excerpt ?? '').toLowerCase().includes(q);
+      const inBody = plainText(p.content).toLowerCase().includes(q);
+      return { post: p, inTitle, inExcerpt, inBody };
+    });
+
+    // 语义分：向量不可用时全部为 0，只靠字面命中
+    let vectors: (number[] | null)[] = [];
+    let queryVec: number[] | null = null;
+    if (this.embedding.enabled) {
+      const texts = corpus.map(
+        (p) => `${p.title}\n${p.excerpt ?? ''}\n${plainText(p.content).slice(0, 3000)}`,
+      );
+      const all = await this.embedding.embedMany([query, ...texts]);
+      queryVec = all[0];
+      vectors = all.slice(1);
+    }
+
+    const scored = literal.map((item, i) => {
+      const cos = queryVec && vectors[i] ? cosineSimilarity(queryVec, vectors[i]!) : 0;
+      const literalHit = item.inTitle || item.inExcerpt || item.inBody;
+      // 字面命中权重更高；只出现在正文里的命中权重低一些，避免擦边字面词压过语义匹配
+      const boost = item.inTitle ? 0.3 : item.inExcerpt ? 0.12 : item.inBody ? 0.05 : 0;
+      return { post: item.post, cos, literalHit, score: cos + boost };
+    });
+
+    const kept = scored
+      .filter((s) => s.literalHit || s.cos >= 0.45)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+
+    return {
+      data: kept.map((s) => {
+        const { content, aiKeywords, ...rest } = s.post as any;
+        return { ...this.formatPost(rest), score: Number(s.score.toFixed(3)) };
+      }),
+      meta: { total: kept.length, query, semantic: Boolean(queryVec) },
+    };
   }
 
   async findBySlug(slug: string) {

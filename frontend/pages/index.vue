@@ -260,70 +260,70 @@ function formatDate(date: string) {
         </p>
       </section>
     </div>
+
+    <!-- 桌面端：左侧标签栏，默认折叠，点左边缘的「标签」展开 -->
+    <button
+      v-if="allTags.length && !tagsOpen"
+      type="button"
+      class="tag-text fixed left-0 top-24 z-30 hidden h-16 w-6 items-center justify-center rounded-r-md border border-l-0 border-[var(--reader-line)] bg-[var(--reader-paper)] text-[var(--reader-muted)] transition-colors hover:text-[var(--reader-accent)] xl:flex"
+      title="展开标签"
+      aria-label="展开标签"
+      @click="toggleTags"
+    >
+      <span class="tag-tab-text text-[13px]">标签</span>
+    </button>
+
+    <aside
+      v-if="allTags.length && tagsOpen"
+      aria-label="标签筛选"
+      class="tag-text fixed bottom-6 left-0 top-12 z-30 hidden w-60 overflow-y-auto border-r border-[var(--reader-line)] bg-[var(--reader-paper)] px-5 py-2 xl:block"
+    >
+      <div class="mb-3 flex items-center justify-between">
+        <p class="text-[15px] font-semibold text-[var(--reader-ink)]">标签</p>
+        <button
+          type="button"
+          class="-mr-2 flex h-6 w-6 items-center justify-center rounded text-[var(--reader-muted)] transition-colors hover:bg-[var(--reader-surface)] hover:text-[var(--reader-accent)]"
+          title="收起标签"
+          aria-label="收起标签"
+          @click="toggleTags"
+        >
+          <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
+          </svg>
+        </button>
+      </div>
+      <nav aria-label="按标签筛选文章" class="grid gap-0.5">
+        <button
+          type="button"
+          class="flex items-baseline justify-between gap-2 border-l-2 py-[5px] pl-3 pr-2 text-left text-sm transition-colors"
+          :class="activeTags.length === 0
+            ? 'border-[var(--reader-accent)] bg-[var(--reader-surface)] font-medium text-[var(--reader-accent)]'
+            : 'border-transparent text-[var(--reader-muted)] hover:border-[var(--reader-line)] hover:text-[var(--reader-ink)]'"
+          :aria-pressed="activeTags.length === 0"
+          @click="activeTags = []"
+        >
+          <span>全部</span>
+          <span class="shrink-0 text-[11px] tabular-nums opacity-60">{{ allPosts.length }}</span>
+        </button>
+        <button
+          v-for="tag in allTags"
+          :key="tag.name"
+          type="button"
+          class="flex items-baseline justify-between gap-2 border-l-2 py-[5px] pl-3 pr-2 text-left text-sm transition-colors"
+          :class="activeTags.includes(tag.name)
+            ? 'border-[var(--reader-accent)] bg-[var(--reader-surface)] font-medium text-[var(--reader-accent)]'
+            : 'border-transparent text-[var(--reader-muted)] hover:border-[var(--reader-line)] hover:text-[var(--reader-ink)]'"
+          :title="`#${tag.name}`"
+          :aria-pressed="activeTags.includes(tag.name)"
+          @click="toggleTag(tag.name)"
+        >
+          <span class="min-w-0 truncate">#{{ tag.name }}</span>
+          <span class="shrink-0 text-[11px] tabular-nums opacity-60">{{ tag.count }}</span>
+        </button>
+      </nav>
+    </aside>
   </div>
-
-  <!-- 桌面端：左侧标签栏，默认折叠，点左边缘的「标签」展开 -->
-  <button
-    v-if="allTags.length && !tagsOpen"
-    type="button"
-    class="tag-text fixed left-0 top-24 z-30 hidden h-16 w-6 items-center justify-center rounded-r-md border border-l-0 border-[var(--reader-line)] bg-[var(--reader-paper)] text-[var(--reader-muted)] transition-colors hover:text-[var(--reader-accent)] xl:flex"
-    title="展开标签"
-    aria-label="展开标签"
-    @click="toggleTags"
-  >
-    <span class="tag-tab-text text-[13px]">标签</span>
-  </button>
-
-  <aside
-    v-if="allTags.length && tagsOpen"
-    aria-label="标签筛选"
-    class="tag-text fixed bottom-6 left-0 top-12 z-30 hidden w-60 overflow-y-auto border-r border-[var(--reader-line)] bg-[var(--reader-paper)] px-5 py-2 xl:block"
-  >
-    <div class="mb-3 flex items-center justify-between">
-      <p class="text-[15px] font-semibold text-[var(--reader-ink)]">标签</p>
-      <button
-        type="button"
-        class="-mr-2 flex h-6 w-6 items-center justify-center rounded text-[var(--reader-muted)] transition-colors hover:bg-[var(--reader-surface)] hover:text-[var(--reader-accent)]"
-        title="收起标签"
-        aria-label="收起标签"
-        @click="toggleTags"
-      >
-        <svg class="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-          stroke-linecap="round" stroke-linejoin="round">
-          <path d="M11 17l-5-5 5-5M18 17l-5-5 5-5" />
-        </svg>
-      </button>
-    </div>
-    <nav aria-label="按标签筛选文章" class="grid gap-0.5">
-      <button
-        type="button"
-        class="flex items-baseline justify-between gap-2 border-l-2 py-[5px] pl-3 pr-2 text-left text-sm transition-colors"
-        :class="activeTags.length === 0
-          ? 'border-[var(--reader-accent)] bg-[var(--reader-surface)] font-medium text-[var(--reader-accent)]'
-          : 'border-transparent text-[var(--reader-muted)] hover:border-[var(--reader-line)] hover:text-[var(--reader-ink)]'"
-        :aria-pressed="activeTags.length === 0"
-        @click="activeTags = []"
-      >
-        <span>全部</span>
-        <span class="shrink-0 text-[11px] tabular-nums opacity-60">{{ allPosts.length }}</span>
-      </button>
-      <button
-        v-for="tag in allTags"
-        :key="tag.name"
-        type="button"
-        class="flex items-baseline justify-between gap-2 border-l-2 py-[5px] pl-3 pr-2 text-left text-sm transition-colors"
-        :class="activeTags.includes(tag.name)
-          ? 'border-[var(--reader-accent)] bg-[var(--reader-surface)] font-medium text-[var(--reader-accent)]'
-          : 'border-transparent text-[var(--reader-muted)] hover:border-[var(--reader-line)] hover:text-[var(--reader-ink)]'"
-        :title="`#${tag.name}`"
-        :aria-pressed="activeTags.includes(tag.name)"
-        @click="toggleTag(tag.name)"
-      >
-        <span class="min-w-0 truncate">#{{ tag.name }}</span>
-        <span class="shrink-0 text-[11px] tabular-nums opacity-60">{{ tag.count }}</span>
-      </button>
-    </nav>
-  </aside>
 </template>
 
 <style scoped>

@@ -376,6 +376,15 @@ nano /www/wwwroot/blog-website/frontend/.env
 # NUXT_PUBLIC_SITE_URL=https://your-domain.com
 ```
 
+后端 `.env` 还需要向量模型配置（「相关文章」用它做语义排序，模型与 CodeLens 项目一致）。不配也能跑，只是自动退回纯关键词排序：
+
+```bash
+EMBED_API_KEY=sk-xxx
+EMBED_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+EMBED_MODEL=qwen3.7-text-embedding
+EMBED_DIMENSIONS=1536
+```
+
 重启服务：
 
 ```bash

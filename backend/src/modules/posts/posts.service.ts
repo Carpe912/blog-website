@@ -1,9 +1,100 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiService } from './ai.service';
+import { EmbeddingService, cosineSimilarity } from './embedding.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostDto } from './dto/query-post.dto';
+
+/** 去掉 HTML 标签与实体，得到纯文本 */
+function plainText(html: string): string {
+  return (html ?? '')
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&[a-zA-Z#0-9]+;/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * 判定相关文章时忽略的「大路货」词：
+ * 这些词几乎每篇都有，拿来匹配等于没匹配。
+ */
+const TOPIC_STOP_WORDS = new Set([
+  'agent',
+  'llm',
+  'ai',
+  'session',
+  'tool',
+  'tools',
+  'api',
+  'app',
+  'the',
+  'and',
+  'for',
+  'with',
+  'from',
+  '介绍',
+  '详解',
+  '解析',
+  '源码',
+  '深入',
+  '理解',
+  '原理',
+  '实现',
+  '机制',
+  '架构',
+  '设计',
+  '系统',
+  '核心',
+  '技术',
+  '文章',
+  '总结',
+  '实践',
+  '学习',
+  '教程',
+  '完整',
+  '如何',
+  '什么',
+  '怎么',
+  '为什么',
+  '一个',
+  '进行',
+  '通过',
+  '以及',
+  '我们',
+  '可以',
+]);
+
+/** 从标题里切出候选术语：按标点和空格切段，再补上英文技术名词 */
+function buildTopicTerms(post: any): Set<string> {
+  const terms = new Set<string>();
+
+  const push = (raw: string) => {
+    const term = raw.trim().toLowerCase();
+    if (term.length < 2 || term.length > 40) return;
+    if (TOPIC_STOP_WORDS.has(term)) return;
+    // 纯数字/纯标点没意义
+    if (!/[\p{L}]/u.test(term)) return;
+    terms.add(term);
+  };
+
+  // 1) AI 提取的关键词：本身就是术语，权重最高
+  for (const kw of (post.aiKeywords ?? []) as string[]) push(kw);
+
+  // 2) 标题切段：标题里的专有名词往往就是文章主题
+  const segments = String(post.title ?? '').split(
+    /[：:，,。、；;·—\-–—|/\\（）()\[\]【】「」『』“”"'’‘!？?\s]+/,
+  );
+  for (const seg of segments) push(seg);
+
+  // 3) 标题里的英文/数字技术名（如 Compaction、B+Tree、dsh-tools）
+  const latin = String(post.title ?? '').match(/[A-Za-z][A-Za-z0-9.#+_/-]{1,}/g) ?? [];
+  for (const token of latin) push(token);
+
+  return terms;
+}
 
 /**
  * 通用字段选择器 —— 不含 aiKeywords
@@ -29,6 +120,7 @@ export class PostsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
+    private readonly embedding: EmbeddingService,
   ) {}
 
   async findAll(query: QueryPostDto) {
@@ -102,6 +194,7 @@ export class PostsService {
       this._asyncRefreshKeywords(post.id, post.title, dto.content);
     }
 
+    this.invalidateCorpusCache();
     return this.formatPost(post);
   }
 
@@ -150,6 +243,7 @@ export class PostsService {
     });
 
     const updated: any = await this.findOne(id);
+    this.invalidateCorpusCache();
 
     // 内容/标题变化或首次发布时重新提取关键词
     const needsRefresh =
@@ -170,7 +264,9 @@ export class PostsService {
 
   async remove(id: number) {
     await this.findOne(id);
-    return this.prisma.post.delete({ where: { id } });
+    const removed = await this.prisma.post.delete({ where: { id } });
+    this.invalidateCorpusCache();
+    return removed;
   }
 
   // ── 手动刷新 AI 关键词（管理接口）────────────────────────────────────────
@@ -192,6 +288,7 @@ export class PostsService {
       return { id, aiKeywords: keywords, warning: '数据库迁移尚未执行，关键词未持久化' };
     }
 
+    this.invalidateCorpusCache();
     return { id, aiKeywords: keywords };
   }
 
@@ -219,69 +316,164 @@ export class PostsService {
     return { prev: prev ?? null, next: next ?? null };
   }
 
-  // ── 相关文章（基于 AI 关键词）─────────────────────────────────────────────
-  async findRelatedBySlug(slug: string, limit = 4) {
-    const post = await this.prisma.post.findUnique({
-      where: { slug },
-      select: { id: true },
+  // ── 相关文章：本文正文里"提到了什么"，再找讲解该概念的文章 ────────────────
+  //
+  // 旧实现只看「AI 关键词集合的交集」，命中不足时还用最新文章补齐，
+  // 结果就是每篇文末都挂着几篇无关的最新文章。
+  //
+  // 现在的判定口径：
+  //   1. 候选文章的主题词 = AI 关键词 + 标题切分出的术语（含英文技术名）
+  //   2. 只有当这些主题词真正出现在**当前文章的标题/摘要/正文**里，才算命中
+  //   3. 命中词的权重按 IDF 计算 —— 越少见越值钱，
+  //      "Agent""Session"这类几乎每篇都有的词几乎不加分
+  //   4. 命中太少或过于大众的文章直接丢弃，宁可少显示也不凑数（不再用最新文章兜底）
+  async findRelatedBySlug(slug: string, limit = 3) {
+    const corpus = await this.getCorpus();
+    const current = corpus.find((p) => p.slug === slug);
+    if (!current) throw new NotFoundException(`文章 "${slug}" 不存在`);
+
+    const others = corpus.filter((p) => p.id !== current.id);
+    if (others.length === 0) return [];
+
+    const total = corpus.length;
+    // 当前文章的检索文本：标题权重最高，其次摘要、正文
+    const curTitle = current.title.toLowerCase();
+    const curExcerpt = (current.excerpt ?? '').toLowerCase();
+    const curBody = plainText(current.content).toLowerCase();
+    const curAll = `${curTitle}\n${curExcerpt}\n${curBody}`;
+
+    const terms = new Map<number, string[]>(); // 候选文章 id → 主题词
+    for (const p of others) terms.set(p.id, Array.from(buildTopicTerms(p)));
+
+    // 文档频率（词出现在多少篇文章里），用于 IDF 加权
+    const df = new Map<string, number>();
+    for (const list of terms.values()) {
+      for (const t of list) df.set(t, (df.get(t) ?? 0) + 1);
+    }
+
+    const scored = others.map((p) => {
+      const list = terms.get(p.id) ?? [];
+      let score = 0;
+      let strongHits = 0; // 命中且不算大众的词数量
+      let rareHits = 0; // 命中且极少见的词数量
+
+      for (const term of list) {
+        if (!curAll.includes(term)) continue;
+
+        const freq = df.get(term) ?? 1;
+        // 稀有度权重：全站都有的词趋近 0，只有少数文章提到的词最高
+        const idf = Math.log(1 + total / freq);
+        // 出现在标题里的概念，说明本文真的在讲它
+        const weight = curTitle.includes(term) ? 2.4 : curExcerpt.includes(term) ? 1.6 : 1;
+        score += idf * weight;
+
+        if (freq <= Math.max(3, Math.ceil(total * 0.4))) strongHits += 1;
+        if (freq <= 3 && term.length >= 3) rareHits += 1;
+      }
+
+      return { post: p, score, strongHits, rareHits };
     });
-    if (!post) throw new NotFoundException(`文章 "${slug}" 不存在`);
 
-    // 读取当前文章的 AI 关键词（列不存在时降级为空）
-    const kw = await (this.prisma.post as any)
-      .findUnique({ where: { slug }, select: { aiKeywords: true } })
-      .catch(() => null);
-    const aiKeywords: string[] = kw?.aiKeywords ?? [];
+    // 相关性门槛：至少 2 个非大众主题词，或 1 个罕见的专有概念
+    const passed = scored.filter(
+      (s) => s.score > 0 && (s.strongHits >= 2 || s.rareHits >= 1),
+    );
+    if (passed.length === 0) return [];
 
-    let candidates: any[] = [];
+    passed.sort((a, b) => b.score - a.score);
+    const best = passed[0].score;
 
-    if (aiKeywords.length > 0) {
-      candidates = await (this.prisma.post as any)
-        .findMany({
-          where: {
-            published: true,
-            NOT: { id: post.id },
-            aiKeywords: { hasSome: aiKeywords },
-          },
-          orderBy: { createdAt: 'desc' },
-          take: limit * 8,
-          select: { ...POST_LIST_SELECT, aiKeywords: true },
-        })
-        .catch(() => []);
-    }
+    // ── 用向量语义相似度给"已经过了关键词门槛"的候选排序 ──
+    // 关键词门槛保证「本文确实提到了这篇讲的东西」，向量负责判断
+    // 「提到的那件事，跟那篇文章的主线有多近」。向量不可用时退回关键词分。
+    const ranked = await this.rankByEmbedding(current, passed, best);
 
-    // 候选不足时用最新文章补齐
-    if (candidates.length < limit) {
-      const excludeIds = [post.id, ...candidates.map((c) => c.id)];
-      const extra = await this.prisma.post.findMany({
-        where: { published: true, NOT: { id: { in: excludeIds } } },
-        orderBy: { createdAt: 'desc' },
-        take: limit - candidates.length,
-        select: POST_LIST_SELECT,
-      });
-      candidates = [...candidates, ...extra];
-    }
+    // 与最佳结果差距过大的尾部去掉，避免"勉强相关"凑数
+    const topScore = ranked[0]?.final ?? 1;
+    const kept = ranked
+      .filter((s) => s.final >= topScore * 0.35)
+      .slice(0, limit);
 
-    return this._scoreAndSlice(candidates, aiKeywords, limit);
+    return kept.map((s) => {
+      const { content, aiKeywords, ...rest } = s.post as any;
+      return this.formatPost(rest);
+    });
   }
 
-  // ── 私有：按关键词相似度打分 ──────────────────────────────────────────────
-  private _scoreAndSlice(candidates: any[], currentAiKws: string[], limit: number) {
-    const currentKwSet = new Set(currentAiKws);
+  /** 关键词分（0~1，按本次最高分归一）与余弦相似度加权，得到最终排序分 */
+  private async rankByEmbedding(
+    current: any,
+    candidates: { post: any; score: number }[],
+    bestScore: number,
+  ) {
+    const baseline = candidates.map((c) => ({
+      ...c,
+      cos: 0,
+      final: bestScore > 0 ? c.score / bestScore : 0,
+    }));
 
-    const scored = candidates.map((c) => {
-      let score = 0;
-      if (currentKwSet.size > 0 && c.aiKeywords?.length > 0) {
-        const candidateSet = new Set<string>(c.aiKeywords);
-        const intersection = [...currentKwSet].filter((k) => candidateSet.has(k)).length;
-        const union = new Set([...currentKwSet, ...candidateSet]).size;
-        score += union > 0 ? (intersection / union) * 10 : 0;
-      }
-      return { post: c, score };
-    });
+    if (!this.embedding.enabled || candidates.length === 0) return baseline;
 
-    scored.sort((a, b) => b.score - a.score);
-    return scored.slice(0, limit).map((s) => this.formatPost(s.post));
+    const texts = [current, ...candidates.map((c) => c.post)].map((p) =>
+      `${p.title}\n${p.excerpt ?? ''}\n${plainText(p.content).slice(0, 3000)}`,
+    );
+    const vectors = await this.embedding.embedMany(texts);
+    const curVec = vectors[0];
+    if (!curVec) return baseline;
+
+    return baseline
+      .map((c, i) => {
+        const cos = vectors[i + 1] ? cosineSimilarity(curVec, vectors[i + 1]!) : 0;
+        return {
+          ...c,
+          cos,
+          // 语义占七成：同样是"提到了"，讲同一件事的文章更该排在前面
+          final: cos * 0.7 + c.final * 0.3,
+        };
+      })
+      .sort((a, b) => b.final - a.final);
+  }
+
+  // ── 私有：全站文章语料（带 5 分钟缓存，写操作后立即失效）─────────────────
+  private corpusCache: { at: number; posts: any[] } | null = null;
+  private static readonly CORPUS_TTL = 5 * 60 * 1000;
+
+  private async getCorpus(): Promise<any[]> {
+    const now = Date.now();
+    if (this.corpusCache && now - this.corpusCache.at < PostsService.CORPUS_TTL) {
+      return this.corpusCache.posts;
+    }
+
+    const baseSelect = {
+      id: true,
+      title: true,
+      slug: true,
+      excerpt: true,
+      content: true,
+      createdAt: true,
+    };
+
+    let rows: any[];
+    try {
+      rows = await (this.prisma.post as any).findMany({
+        where: { published: true },
+        select: { ...baseSelect, aiKeywords: true },
+      });
+    } catch {
+      // aiKeywords 列还没迁移时降级：只靠标题里的术语
+      rows = await this.prisma.post.findMany({
+        where: { published: true },
+        select: baseSelect,
+      });
+    }
+
+    const posts = rows.map((r) => ({ ...r, aiKeywords: r.aiKeywords ?? [] }));
+    this.corpusCache = { at: now, posts };
+    return posts;
+  }
+
+  private invalidateCorpusCache() {
+    this.corpusCache = null;
   }
 
   // ── 私有：slug 生成与校验 ─────────────────────────────────────────────────
@@ -350,6 +542,8 @@ export class PostsService {
             where: { id },
             data: { aiKeywords: keywords },
           });
+          // 关键词变了，相关文章要重新算
+          this.invalidateCorpusCache();
         } catch {
           // 迁移尚未执行，静默忽略
         }

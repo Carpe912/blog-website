@@ -84,7 +84,9 @@ const allTags = computed(() => {
   }
   return [...map.entries()]
     .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
+    // 按使用次数倒序；同频时按字符串码点排序。
+    // 不能用 localeCompare：Node 与浏览器的中文排序规则不同，会导致 SSR 与客户端渲染顺序不一致
+    .sort((a, b) => b.count - a.count || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
 })
 
 const filteredPosts = computed<any[]>(() => {

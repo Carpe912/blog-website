@@ -135,7 +135,7 @@ onBeforeUnmount(() => {
         :aria-current="activeId === heading.id ? 'location' : undefined"
         class="break-words py-2 text-[15px] hover:text-[var(--reader-accent)]"
         :class="[
-          heading.level === 3 ? 'pl-4' : '',
+          heading.level === 1 ? 'font-medium' : heading.level === 2 ? 'pl-3' : 'pl-6',
           activeId === heading.id ? 'text-[var(--reader-accent)]' : 'text-[var(--reader-muted)]',
         ]"
         @click="mobileToc?.removeAttribute('open')"
@@ -195,7 +195,7 @@ onBeforeUnmount(() => {
           :aria-current="activeId === h.id ? 'location' : undefined"
           class="block truncate border-l-2 py-[5px] pr-2 text-sm leading-relaxed transition-colors"
           :class="[
-            h.level === 3 ? 'pl-6' : 'pl-3',
+            h.level === 1 ? 'pl-2 font-medium' : h.level === 2 ? 'pl-5' : 'pl-8',
             activeId === h.id
               ? 'border-[var(--reader-accent)] bg-[var(--reader-surface)] font-medium text-[var(--reader-accent)]'
               : 'border-[var(--reader-line)] text-[var(--reader-muted)] hover:text-[var(--reader-accent)]',

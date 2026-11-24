@@ -5,7 +5,7 @@
  *   const articleRef = ref<HTMLElement | null>(null)
  *   const { headings, activeId } = useToc(renderedHtml, articleRef)
  *
- * - headings：从 HTML 字符串解析出的 h2/h3 标题列表（SSR 安全）
+ * - headings：从 HTML 字符串解析出的 h1/h2/h3 标题列表（SSR 安全）
  * - activeId：当前滚动到的标题 id（客户端 IntersectionObserver 驱动）
  */
 export const DEFAULT_TOC_WIDTH = 408
@@ -13,7 +13,22 @@ export const DEFAULT_TOC_WIDTH = 408
 export interface TocHeading {
   id: string
   text: string
-  level: 2 | 3
+  level: 1 | 2 | 3
+}
+
+/**
+ * h1 是否值得进目录。
+ *
+ * 编辑器里有不少 h1 其实是图表标签或示例数据（"U+4E2D"、"50K"、"😀"），
+ * 一律收进目录会把侧栏撑满噪音，所以只保留"像标题"的：
+ *  - 含中文且不短于 6 个字，或
+ *  - 足够长的纯英文标题（>= 12 字符）
+ */
+function isTocHeading1(text: string): boolean {
+  const t = text.trim()
+  if (!t) return false
+  const hasCjk = /[\u4e00-\u9fa5]/.test(t)
+  return hasCjk ? t.length >= 6 : t.length >= 12
 }
 
 export function useToc(
@@ -23,16 +38,15 @@ export function useToc(
   // ── 从 HTML 字符串解析标题（SSR 安全，无需 DOM）──────────────────────────
   const headings = computed<TocHeading[]>(() => {
     const result: TocHeading[] = []
-    const regex = /<h([23])[^>]*\sid="([^"]+)"[^>]*>([\s\S]*?)<\/h\1>/gi
+    const regex = /<h([123])[^>]*\sid="([^"]+)"[^>]*>([\s\S]*?)<\/h\1>/gi
     let match: RegExpExecArray | null
     // eslint-disable-next-line no-cond-assign
     while ((match = regex.exec(contentHtml.value)) !== null) {
-      result.push({
-        level: parseInt(match[1]) as 2 | 3,
-        id: match[2],
-        // 去掉内联 HTML 标签（如 <code>）
-        text: match[3].replace(/<[^>]+>/g, '').trim(),
-      })
+      const level = parseInt(match[1]) as 1 | 2 | 3
+      // 去掉内联 HTML 标签（如 <code>）
+      const text = match[3].replace(/<[^>]+>/g, '').trim()
+      if (level === 1 && !isTocHeading1(text)) continue
+      result.push({ level, id: match[2], text })
     }
     return result
   })
@@ -48,7 +62,7 @@ export function useToc(
       const article = articleRef.value
       if (!article) return
 
-      const els = Array.from(article.querySelectorAll<HTMLElement>('h2[id], h3[id]'))
+      const els = Array.from(article.querySelectorAll<HTMLElement>('h1[id], h2[id], h3[id]'))
       if (els.length === 0) return
 
       // 顶部留 80px（固定导航高度），底部留 60% 屏高，确保标题进入视口上方时触发

@@ -222,27 +222,6 @@ function formatDate(date: string) {
                   </NuxtLink>
                 </h2>
 
-                <!-- 标签紧跟标题，z-10 保证能盖住上面的整行链接 -->
-                <div
-                  v-if="post.tags?.length"
-                  class="tag-text relative z-10 mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px] leading-5"
-                  aria-label="文章标签"
-                >
-                  <button
-                    v-for="tag in post.tags"
-                    :key="tag.id"
-                    type="button"
-                    class="transition-colors"
-                    :class="activeTags.includes(tag.name)
-                      ? 'text-[var(--reader-accent)]'
-                      : 'text-[var(--reader-muted)] hover:text-[var(--reader-accent)]'"
-                    :aria-pressed="activeTags.includes(tag.name)"
-                    @click="toggleTag(tag.name)"
-                  >
-                    #{{ tag.name }}
-                  </button>
-                </div>
-
                 <p
                   v-if="post.excerpt"
                   :title="post.excerpt"

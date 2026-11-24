@@ -60,9 +60,9 @@ onMounted(() => {
   if (q && !searchResults.value) runSearch(q)
 })
 
-// ── 标签筛选 ───────────────────────────────────────────────────────────────
+// ── 标签筛选（多选，空选 = 全部）─────────────────────────────────────────
 // 标签随文章接口一起返回，直接按全量列表聚合，无需额外请求
-const activeTag = useState('blog-tag', () => '')
+const activeTags = useState<string[]>('blog-tags', () => [])
 
 const allTags = computed(() => {
   const map = new Map<string, number>()
@@ -82,19 +82,27 @@ const filteredPosts = computed<any[]>(() => {
   const source = (Array.isArray(searchResults.value) ? searchResults.value : allPosts.value).map(
     (p: any) => ({ ...p, tags: p.tags?.length ? p.tags : tagsById.get(p.id) ?? [] }),
   )
-  if (!activeTag.value) return source
-  return source.filter((p: any) => p.tags.some((t: any) => t.name === activeTag.value))
+  // 多选按「任一命中」取并集；一个都没选时不过滤，等同于全部
+  if (activeTags.value.length === 0) return source
+  return source.filter((p: any) =>
+    p.tags.some((t: any) => activeTags.value.includes(t.name)),
+  )
 })
 
 function toggleTag(name: string) {
-  activeTag.value = activeTag.value === name ? '' : name
+  activeTags.value = activeTags.value.includes(name)
+    ? activeTags.value.filter((n) => n !== name)
+    : [...activeTags.value, name]
+}
+
+function removeTag(name: string) {
+  activeTags.value = activeTags.value.filter((n) => n !== name)
 }
 
 const statusText = computed(() => {
-  if (searchQuery.value.trim()) {
-    return searching.value ? '搜索中…' : `${filteredPosts.value.length} 篇匹配`
-  }
-  if (activeTag.value) return `#${activeTag.value} · ${filteredPosts.value.length} 篇`
+  if (searching.value) return '搜索中…'
+  if (searchQuery.value.trim()) return `${filteredPosts.value.length} 篇匹配`
+  if (activeTags.value.length) return `${filteredPosts.value.length} 篇`
   return `${allPosts.value.length} 篇文章`
 })
 
@@ -115,9 +123,24 @@ function formatDate(date: string) {
 
       <section aria-label="文章列表">
         <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--reader-line)] pb-4">
-          <p role="status" class="text-sm tabular-nums text-[var(--reader-muted)]">
-            {{ error ? '文章列表' : statusText }}
-          </p>
+          <div role="status" class="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm tabular-nums text-[var(--reader-muted)]">
+            <template v-if="error">文章列表</template>
+            <template v-else>
+              <button
+                v-for="name in activeTags"
+                :key="name"
+                type="button"
+                class="inline-flex items-center gap-1 rounded-sm border border-[var(--reader-line)] bg-[var(--reader-surface)] px-2 py-0.5 text-[13px] leading-5 text-[var(--reader-ink)] transition-colors hover:border-[var(--reader-accent)] hover:text-[var(--reader-accent)]"
+                :title="`取消筛选 #${name}`"
+                @click="removeTag(name)"
+              >
+                #{{ name }}
+                <span aria-hidden="true" class="text-sm leading-none opacity-60">×</span>
+                <span class="sr-only">取消筛选</span>
+              </button>
+              <span>{{ statusText }}</span>
+            </template>
+          </div>
           <label class="archive-search flex w-full items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56">
             <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
               <path d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
@@ -135,18 +158,18 @@ function formatDate(date: string) {
         <!-- 移动端：标签收进折叠面板，避免标签墙压住列表 -->
         <details v-if="allTags.length" class="mt-4 rounded-md border border-[var(--reader-line)] xl:hidden">
           <summary class="cursor-pointer px-4 py-3 text-[15px] font-medium text-[var(--reader-muted)]">
-            标签{{ activeTag ? ` · #${activeTag}` : '' }}
+            标签{{ activeTags.length ? ` · 已选 ${activeTags.length} 个` : '' }}
             <span class="ml-1 text-[11px] tabular-nums opacity-60">{{ allTags.length }}</span>
           </summary>
           <div class="flex max-h-72 flex-wrap items-baseline gap-x-4 gap-y-1.5 overflow-y-auto border-t border-[var(--reader-line)] px-4 py-3 text-[13px]">
             <button
               type="button"
               class="py-0.5 transition-colors"
-              :class="activeTag
-                ? 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'
-                : 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'"
-              :aria-pressed="!activeTag"
-              @click="activeTag = ''"
+              :class="activeTags.length === 0
+                ? 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'
+                : 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'"
+              :aria-pressed="activeTags.length === 0"
+              @click="activeTags = []"
             >
               全部
             </button>
@@ -155,10 +178,10 @@ function formatDate(date: string) {
               :key="tag.name"
               type="button"
               class="py-0.5 transition-colors"
-              :class="activeTag === tag.name
+              :class="activeTags.includes(tag.name)
                 ? 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'
                 : 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'"
-              :aria-pressed="activeTag === tag.name"
+              :aria-pressed="activeTags.includes(tag.name)"
               @click="toggleTag(tag.name)"
             >
               #{{ tag.name }}<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ tag.count }}</span>
@@ -197,7 +220,7 @@ function formatDate(date: string) {
         </ul>
 
         <p v-else class="border-b border-[var(--reader-line)] py-16 text-center text-sm text-[var(--reader-muted)]">
-          {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : activeTag ? '该标签下暂无文章' : '暂无文章' }}
+          {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : activeTags.length ? '所选标签下暂无文章' : '暂无文章' }}
         </p>
       </section>
     </div>
@@ -214,11 +237,11 @@ function formatDate(date: string) {
       <button
         type="button"
         class="flex items-baseline justify-between gap-2 border-l-2 py-[5px] pl-3 pr-2 text-left text-sm transition-colors"
-        :class="!activeTag
+        :class="activeTags.length === 0
           ? 'border-[var(--reader-accent)] bg-[var(--reader-surface)] font-medium text-[var(--reader-accent)]'
           : 'border-transparent text-[var(--reader-muted)] hover:border-[var(--reader-line)] hover:text-[var(--reader-ink)]'"
-        :aria-pressed="!activeTag"
-        @click="activeTag = ''"
+        :aria-pressed="activeTags.length === 0"
+        @click="activeTags = []"
       >
         <span>全部</span>
         <span class="shrink-0 text-[11px] tabular-nums opacity-60">{{ allPosts.length }}</span>
@@ -228,11 +251,11 @@ function formatDate(date: string) {
         :key="tag.name"
         type="button"
         class="flex items-baseline justify-between gap-2 border-l-2 py-[5px] pl-3 pr-2 text-left text-sm transition-colors"
-        :class="activeTag === tag.name
+        :class="activeTags.includes(tag.name)
           ? 'border-[var(--reader-accent)] bg-[var(--reader-surface)] font-medium text-[var(--reader-accent)]'
           : 'border-transparent text-[var(--reader-muted)] hover:border-[var(--reader-line)] hover:text-[var(--reader-ink)]'"
         :title="`#${tag.name}`"
-        :aria-pressed="activeTag === tag.name"
+        :aria-pressed="activeTags.includes(tag.name)"
         @click="toggleTag(tag.name)"
       >
         <span class="min-w-0 truncate">#{{ tag.name }}</span>

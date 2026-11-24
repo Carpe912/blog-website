@@ -157,6 +157,8 @@ const POST_LIST_SELECT = POST_SELECT;
 @Injectable()
 export class PostsService {
   private readonly logger = new Logger(PostsService.name);
+  /** 词表复审是否进行中（防止并发重打） */
+  private vocabularyReviewing = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -331,6 +333,9 @@ export class PostsService {
       this._asyncRefreshKeywords(created.id, created.title, dto.content);
     }
 
+    // 每新增一篇文章，后台复审一次词表：能合并就合并并全量重打，没变化不动
+    this._asyncReviewVocabulary();
+
     this.invalidateCorpusCache();
     return this.findOne(created.id);
   }
@@ -476,23 +481,59 @@ export class PostsService {
     return { total: posts.length, tagged };
   }
 
-  // ── 重建标签体系（管理接口）───────────────────────────────────────────────
-  // 先让模型按当前全部文章生成一套精简词表（可合并同义/过细标签），
-  // 再逐篇按新词表重打标签，最后清理词表外且已无关联的旧标签。
+  // ── 标签体系：复审 / 重建 / 全量重打 ─────────────────────────────────────
+  //
+  // 每新建一篇文章都会在后台复审一次词表：
+  //   - 模型判断现有标签是否仍然够用
+  //   - 有变化（合并 / 更名 / 新主题）→ 全量重打所有文章，删掉旧标签
+  //   - 没变化 → 什么都不做
+  // 管理接口 rebuild-tags 可手动触发同一套流程。
+
+  /** 复审词表；返回是否发生变化 */
+  async reviewVocabulary() {
+    const posts = await this.loadPostsForTags();
+    if (posts.length === 0) return { changed: false, reason: 'no-posts' };
+
+    const current = await this.loadTagCounts();
+    const proposed = await this.ai.proposeVocabulary(
+      posts.map((p) => ({ title: p.title, excerpt: p.excerpt })),
+      current.map((t) => ({ name: t.name, count: t._count.posts })),
+    );
+
+    const vocabulary = this.normalizeVocabulary(proposed);
+    if (vocabulary.length === 0) {
+      return { changed: false, reason: 'empty-proposal' };
+    }
+
+    const previous = current.map((t) => t.name);
+    if (this.isSameVocabulary(vocabulary, previous)) {
+      return { changed: false, vocabulary };
+    }
+
+    const stats = await this.retagAll(vocabulary, posts);
+    this.logger.log(`标签体系已更新：${previous.join('、')} → ${vocabulary.join('、')}`);
+    return { changed: true, previous, vocabulary, ...stats };
+  }
+
+  /** 后台复审：同一时间只跑一个，避免并发重打 */
+  private _asyncReviewVocabulary(): void {
+    if (this.vocabularyReviewing) return;
+    this.vocabularyReviewing = true;
+    this.reviewVocabulary()
+      .catch((err) => this.logger.error('标签体系复审失败', err))
+      .finally(() => {
+        this.vocabularyReviewing = false;
+      });
+  }
+
+  // ── 重建标签体系（管理接口，dryRun 只预览词表）──────────────────────────
   async rebuildTags(dryRun = false) {
-    const posts = await this.prisma.post.findMany({
-      select: { id: true, title: true, excerpt: true, content: true },
-      orderBy: { id: 'asc' },
-    });
+    const posts = await this.loadPostsForTags();
     if (posts.length === 0) {
       return { posts: 0, vocabulary: [], retagged: 0, pruned: 0, dryRun };
     }
 
-    const current = await this.prisma.tag.findMany({
-      select: { name: true, _count: { select: { posts: true } } },
-      orderBy: { posts: { _count: 'desc' } },
-    });
-
+    const current = await this.loadTagCounts();
     const proposed = await this.ai.proposeVocabulary(
       posts.map((p) => ({ title: p.title, excerpt: p.excerpt })),
       current.map((t) => ({ name: t.name, count: t._count.posts })),
@@ -519,7 +560,29 @@ export class PostsService {
       };
     }
 
-    // 先把新词表的标签都建出来，避免逐篇重复查
+    const stats = await this.retagAll(vocabulary, posts);
+    return { posts: posts.length, vocabulary, ...stats, dryRun: false };
+  }
+
+  private async loadPostsForTags() {
+    return this.prisma.post.findMany({
+      select: { id: true, title: true, excerpt: true, content: true },
+      orderBy: { id: 'asc' },
+    });
+  }
+
+  private async loadTagCounts() {
+    return this.prisma.tag.findMany({
+      select: { name: true, _count: { select: { posts: true } } },
+      orderBy: { posts: { _count: 'desc' } },
+    });
+  }
+
+  /** 按给定词表重打全部文章，并删除词表外的标签 */
+  private async retagAll(
+    vocabulary: string[],
+    posts: { id: number; title: string; content: string }[],
+  ) {
     for (const name of vocabulary) {
       await this.ensureTag(name);
     }
@@ -546,20 +609,23 @@ export class PostsService {
       }
     }
 
-    // 只删「已不属于新词表且不再关联任何文章」的标签，避免误删还在用的
+    // 词表即标签集合：词表外的标签一律删除
+    // （并发新建的文章可能带着旧标签进来，这里一并清掉，下次复审会补）
     const pruned = await this.prisma.tag.deleteMany({
-      where: { name: { notIn: vocabulary }, posts: { none: {} } },
+      where: { name: { notIn: vocabulary } },
     });
 
     this.invalidateCorpusCache();
-    return {
-      posts: posts.length,
-      vocabulary,
-      retagged,
-      pruned: pruned.count,
-      failures,
-      dryRun: false,
-    };
+    return { retagged, pruned: pruned.count, failures };
+  }
+
+  /** 比较两套词表（忽略顺序与大小写） */
+  private isSameVocabulary(a: string[], b: string[]): boolean {
+    const normalize = (list: string[]) =>
+      [...new Set(list.map((n) => n.trim().toLowerCase()))].sort();
+    const left = normalize(a);
+    const right = normalize(b);
+    return left.length === right.length && left.every((v, i) => v === right[i]);
   }
 
   /** 词表归一化：去重、英文小写，最多 15 个 */

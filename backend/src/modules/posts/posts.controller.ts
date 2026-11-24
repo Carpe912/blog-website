@@ -88,6 +88,12 @@ export class PostsController {
     return this.postsService.rebuildTags(dryRun === 'true' || dryRun === '1');
   }
 
+  // 复审词表：有变化才全量重打，没变化直接返回（新建文章后会自动跑一次）
+  @Post('review-tags')
+  reviewTags() {
+    return this.postsService.reviewVocabulary();
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseIntPipe) id: number) {

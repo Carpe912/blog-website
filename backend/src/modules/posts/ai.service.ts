@@ -135,7 +135,7 @@ ${list}
 返回格式示例：["deepseek", "harness"]`;
 
     try {
-      const text = await this.chat(prompt, 120);
+      const text = await this.chat(prompt, 120, 0.3);
       const match = text.match(/\[[\s\S]*\]/);
       if (!match) return [];
 
@@ -173,12 +173,13 @@ ${list}
         .map((t) => `${t.name}(${t.count})`)
         .join('、') || '（暂无）';
 
-    const prompt = `你在维护一个技术博客的标签体系。请根据全部文章，给出一套精简、稳定的标签词表。
+    const prompt = `你在维护一个技术博客的标签体系。请根据全部文章，判断现有标签是否需要调整。
 
 要求：
+- 如果现有标签已经能覆盖这些文章，就原样返回它们，不要为了改而改
+- 只有出现明显的同义/重叠标签，或新文章带来新的主题簇时，才合并、更名或新增
 - 输出 8 到 15 个标签，每个 2 到 12 个字
 - 标签要「宽」：一个标签能覆盖多篇文章，不要为单篇文章造词
-- 优先复用「现有标签」中次数多的；同义或过于细碎的合并成一个更宽的标签
 - 英文标签小写，中文保持原样，不要标点
 - 只返回 JSON 数组，不要解释
 
@@ -190,7 +191,7 @@ ${titles}
 返回示例：["deepseek", "harness", "源码解析", "agent工程", "javascript", "浏览器"]`;
 
     try {
-      const text = await this.chat(prompt, 300);
+      const text = await this.chat(prompt, 300, 0.2);
       const match = text.match(/\[[\s\S]*\]/);
       if (!match) return [];
 
@@ -208,7 +209,7 @@ ${titles}
   }
 
   // ── 私有：调用 DeepSeek 对话接口 ─────────────────────────────────────────
-  private async chat(prompt: string, maxTokens: number): Promise<string> {
+  private async chat(prompt: string, maxTokens: number, temperature = 0.7): Promise<string> {
     if (!this.apiKey) return '';
 
     const res = await fetch(`${this.baseURL.replace(/\/+$/, '')}/chat/completions`, {
@@ -221,7 +222,7 @@ ${titles}
         model: this.model,
         messages: [{ role: 'user', content: prompt }],
         max_tokens: maxTokens,
-        temperature: 0.7,
+        temperature,
         stream: false,
       }),
     });

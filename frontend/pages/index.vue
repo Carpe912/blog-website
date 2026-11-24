@@ -63,7 +63,6 @@ onMounted(() => {
 // ── 标签筛选 ───────────────────────────────────────────────────────────────
 // 标签随文章接口一起返回，直接按全量列表聚合，无需额外请求
 const activeTag = useState('blog-tag', () => '')
-const tagExpanded = ref(false)
 
 const allTags = computed(() => {
   const map = new Map<string, number>()
@@ -75,17 +74,6 @@ const allTags = computed(() => {
   return [...map.entries()]
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-})
-
-// 默认只露前 12 个，避免标签墙压住列表；选中的标签即使被折叠也要显示
-const visibleTags = computed(() => {
-  if (tagExpanded.value) return allTags.value
-  const top = allTags.value.slice(0, 12)
-  if (activeTag.value && !top.some((t) => t.name === activeTag.value)) {
-    const active = allTags.value.find((t) => t.name === activeTag.value)
-    if (active) return [...top, active]
-  }
-  return top
 })
 
 const filteredPosts = computed<any[]>(() => {
@@ -120,101 +108,138 @@ function formatDate(date: string) {
 </script>
 
 <template>
-  <div class="reader-column pb-20 pt-8 sm:pt-12">
-    <h1 class="sr-only">文章</h1>
+  <!-- 桌面端给左侧标签栏留出位置，正文列保持原有宽度 -->
+  <div class="xl:pl-60">
+    <div class="reader-column pb-20 pt-8 sm:pt-12">
+      <h1 class="sr-only">文章</h1>
 
-    <section aria-label="文章列表">
-      <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--reader-line)] pb-4">
-        <p role="status" class="text-sm tabular-nums text-[var(--reader-muted)]">
-          {{ error ? '文章列表' : statusText }}
-        </p>
-        <label class="archive-search flex w-full items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56">
-          <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-            <path d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-          </svg>
-          <input
-            v-model="searchQuery"
-            type="search"
-            aria-label="搜索文章"
-            placeholder="搜索文章"
-            class="min-h-10 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-[var(--reader-ink)] placeholder:text-[var(--reader-muted)]"
-          />
-        </label>
-      </div>
+      <section aria-label="文章列表">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--reader-line)] pb-4">
+          <p role="status" class="text-sm tabular-nums text-[var(--reader-muted)]">
+            {{ error ? '文章列表' : statusText }}
+          </p>
+          <label class="archive-search flex w-full items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56">
+            <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+            </svg>
+            <input
+              v-model="searchQuery"
+              type="search"
+              aria-label="搜索文章"
+              placeholder="搜索文章"
+              class="min-h-10 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-[var(--reader-ink)] placeholder:text-[var(--reader-muted)]"
+            />
+          </label>
+        </div>
 
-      <div
-        v-if="allTags.length"
-        class="flex flex-wrap items-baseline gap-x-4 gap-y-1.5 border-b border-[var(--reader-line)] py-3 text-[13px]"
-      >
-        <button
-          type="button"
-          class="py-0.5 transition-colors"
-          :class="activeTag
-            ? 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'
-            : 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'"
-          :aria-pressed="!activeTag"
-          @click="activeTag = ''"
-        >
-          全部
-        </button>
-        <button
-          v-for="tag in visibleTags"
-          :key="tag.name"
-          type="button"
-          class="py-0.5 transition-colors"
-          :class="activeTag === tag.name
-            ? 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'
-            : 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'"
-          :aria-pressed="activeTag === tag.name"
-          @click="toggleTag(tag.name)"
-        >
-          #{{ tag.name }}<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ tag.count }}</span>
-        </button>
-        <button
-          v-if="allTags.length > 12"
-          type="button"
-          class="py-0.5 text-[var(--reader-accent)] hover:underline"
-          @click="tagExpanded = !tagExpanded"
-        >
-          {{ tagExpanded ? '收起' : `全部 ${allTags.length} 个标签` }}
-        </button>
-      </div>
-
-      <ul v-if="filteredPosts.length" class="divide-y divide-[var(--reader-line)] border-b border-[var(--reader-line)]">
-        <li v-for="post in filteredPosts" :key="post.id">
-          <NuxtLink
-            :to="`/blog/${post.slug}`"
-            class="group grid grid-cols-[minmax(0,1fr)_1.25rem] items-start gap-x-4 gap-y-2 py-6 sm:grid-cols-[6rem_minmax(0,1fr)_1.25rem] sm:gap-x-6 sm:py-8"
-          >
-            <time
-              :datetime="post.createdAt"
-              class="col-span-2 pt-0.5 text-[13px] tabular-nums text-[var(--reader-muted)] sm:col-span-1 sm:pt-1.5"
+        <!-- 移动端：标签收进折叠面板，避免标签墙压住列表 -->
+        <details v-if="allTags.length" class="mt-4 rounded-md border border-[var(--reader-line)] xl:hidden">
+          <summary class="cursor-pointer px-4 py-3 text-[15px] font-medium text-[var(--reader-muted)]">
+            标签{{ activeTag ? ` · #${activeTag}` : '' }}
+            <span class="ml-1 text-[11px] tabular-nums opacity-60">{{ allTags.length }}</span>
+          </summary>
+          <div class="flex max-h-72 flex-wrap items-baseline gap-x-4 gap-y-1.5 overflow-y-auto border-t border-[var(--reader-line)] px-4 py-3 text-[13px]">
+            <button
+              type="button"
+              class="py-0.5 transition-colors"
+              :class="activeTag
+                ? 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'
+                : 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'"
+              :aria-pressed="!activeTag"
+              @click="activeTag = ''"
             >
-              {{ formatDate(post.createdAt) }}
-            </time>
-            <div class="min-w-0">
-              <h2 class="reader-display text-xl font-bold leading-snug group-hover:text-[var(--reader-accent)] sm:text-2xl">
-                {{ post.title }}
-              </h2>
-              <p
-                v-if="post.excerpt"
-                :title="post.excerpt"
-                class="reader-display mt-2 line-clamp-2 break-words text-[15px] leading-relaxed text-[var(--reader-muted)]"
-              >
-                {{ post.excerpt }}
-              </p>
-              <p class="mt-3 text-xs tabular-nums text-[var(--reader-muted)]">{{ post.readingTime ?? 1 }} 分钟阅读</p>
-            </div>
-            <span aria-hidden="true" class="pt-1 text-right text-[var(--reader-accent)]">↗</span>
-          </NuxtLink>
-        </li>
-      </ul>
+              全部
+            </button>
+            <button
+              v-for="tag in allTags"
+              :key="tag.name"
+              type="button"
+              class="py-0.5 transition-colors"
+              :class="activeTag === tag.name
+                ? 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'
+                : 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'"
+              :aria-pressed="activeTag === tag.name"
+              @click="toggleTag(tag.name)"
+            >
+              #{{ tag.name }}<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ tag.count }}</span>
+            </button>
+          </div>
+        </details>
 
-      <p v-else class="border-b border-[var(--reader-line)] py-16 text-center text-sm text-[var(--reader-muted)]">
-        {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : activeTag ? '该标签下暂无文章' : '暂无文章' }}
-      </p>
-    </section>
+        <ul v-if="filteredPosts.length" class="divide-y divide-[var(--reader-line)] border-b border-[var(--reader-line)]">
+          <li v-for="post in filteredPosts" :key="post.id">
+            <NuxtLink
+              :to="`/blog/${post.slug}`"
+              class="group grid grid-cols-[minmax(0,1fr)_1.25rem] items-start gap-x-4 gap-y-2 py-6 sm:grid-cols-[6rem_minmax(0,1fr)_1.25rem] sm:gap-x-6 sm:py-8"
+            >
+              <time
+                :datetime="post.createdAt"
+                class="col-span-2 pt-0.5 text-[13px] tabular-nums text-[var(--reader-muted)] sm:col-span-1 sm:pt-1.5"
+              >
+                {{ formatDate(post.createdAt) }}
+              </time>
+              <div class="min-w-0">
+                <h2 class="reader-display text-xl font-bold leading-snug group-hover:text-[var(--reader-accent)] sm:text-2xl">
+                  {{ post.title }}
+                </h2>
+                <p
+                  v-if="post.excerpt"
+                  :title="post.excerpt"
+                  class="reader-display mt-2 line-clamp-2 break-words text-[15px] leading-relaxed text-[var(--reader-muted)]"
+                >
+                  {{ post.excerpt }}
+                </p>
+                <p class="mt-3 text-xs tabular-nums text-[var(--reader-muted)]">{{ post.readingTime ?? 1 }} 分钟阅读</p>
+              </div>
+              <span aria-hidden="true" class="pt-1 text-right text-[var(--reader-accent)]">↗</span>
+            </NuxtLink>
+          </li>
+        </ul>
+
+        <p v-else class="border-b border-[var(--reader-line)] py-16 text-center text-sm text-[var(--reader-muted)]">
+          {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : activeTag ? '该标签下暂无文章' : '暂无文章' }}
+        </p>
+      </section>
+    </div>
   </div>
+
+  <!-- 桌面端：左侧标签栏（与文章页目录同一套视觉） -->
+  <aside
+    v-if="allTags.length"
+    aria-label="标签筛选"
+    class="fixed bottom-6 left-0 top-12 z-30 hidden w-60 overflow-y-auto border-r border-[var(--reader-line)] bg-[var(--reader-paper)] px-5 py-2 xl:block"
+  >
+    <p class="mb-3 text-[15px] font-semibold text-[var(--reader-ink)]">标签</p>
+    <nav aria-label="按标签筛选文章" class="grid gap-0.5">
+      <button
+        type="button"
+        class="flex items-baseline justify-between gap-2 border-l-2 py-[5px] pl-3 pr-2 text-left text-sm transition-colors"
+        :class="!activeTag
+          ? 'border-[var(--reader-accent)] bg-[var(--reader-surface)] font-medium text-[var(--reader-accent)]'
+          : 'border-transparent text-[var(--reader-muted)] hover:border-[var(--reader-line)] hover:text-[var(--reader-ink)]'"
+        :aria-pressed="!activeTag"
+        @click="activeTag = ''"
+      >
+        <span>全部</span>
+        <span class="shrink-0 text-[11px] tabular-nums opacity-60">{{ allPosts.length }}</span>
+      </button>
+      <button
+        v-for="tag in allTags"
+        :key="tag.name"
+        type="button"
+        class="flex items-baseline justify-between gap-2 border-l-2 py-[5px] pl-3 pr-2 text-left text-sm transition-colors"
+        :class="activeTag === tag.name
+          ? 'border-[var(--reader-accent)] bg-[var(--reader-surface)] font-medium text-[var(--reader-accent)]'
+          : 'border-transparent text-[var(--reader-muted)] hover:border-[var(--reader-line)] hover:text-[var(--reader-ink)]'"
+        :title="`#${tag.name}`"
+        :aria-pressed="activeTag === tag.name"
+        @click="toggleTag(tag.name)"
+      >
+        <span class="min-w-0 truncate">#{{ tag.name }}</span>
+        <span class="shrink-0 text-[11px] tabular-nums opacity-60">{{ tag.count }}</span>
+      </button>
+    </nav>
+  </aside>
 </template>
 
 <style scoped>

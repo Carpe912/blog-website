@@ -201,11 +201,8 @@ function formatDate(date: string) {
         </details>
 
         <ul v-if="filteredPosts.length" class="divide-y divide-[var(--reader-line)] border-b border-[var(--reader-line)]">
-          <li v-for="post in filteredPosts" :key="post.id" class="py-6 sm:py-8">
-            <NuxtLink
-              :to="`/blog/${post.slug}`"
-              class="group grid grid-cols-[minmax(0,1fr)_1.25rem] items-start gap-x-4 gap-y-2 sm:grid-cols-[6rem_minmax(0,1fr)_1.25rem] sm:gap-x-6"
-            >
+          <li v-for="post in filteredPosts" :key="post.id" class="group relative py-6 sm:py-8">
+            <div class="grid grid-cols-[minmax(0,1fr)_1.25rem] items-start gap-x-4 gap-y-2 sm:grid-cols-[6rem_minmax(0,1fr)_1.25rem] sm:gap-x-6">
               <time
                 :datetime="post.createdAt"
                 class="col-span-2 pt-0.5 text-[13px] tabular-nums text-[var(--reader-muted)] sm:col-span-1 sm:pt-1.5"
@@ -213,9 +210,37 @@ function formatDate(date: string) {
                 {{ formatDate(post.createdAt) }}
               </time>
               <div class="min-w-0">
-                <h2 class="reader-display text-xl font-bold leading-snug group-hover:text-[var(--reader-accent)] sm:text-2xl">
-                  {{ post.title }}
+                <h2 class="reader-display text-xl font-bold leading-snug sm:text-2xl">
+                  <!-- 链接用伪元素铺满整行：标题、摘要点哪都能进文章 -->
+                  <NuxtLink
+                    :to="`/blog/${post.slug}`"
+                    class="transition-colors group-hover:text-[var(--reader-accent)] after:absolute after:inset-0 after:content-['']"
+                  >
+                    {{ post.title }}
+                  </NuxtLink>
                 </h2>
+
+                <!-- 标签紧跟标题，z-10 保证能盖住上面的整行链接 -->
+                <div
+                  v-if="post.tags?.length"
+                  class="tag-text relative z-10 mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px] leading-5"
+                  aria-label="文章标签"
+                >
+                  <button
+                    v-for="tag in post.tags"
+                    :key="tag.id"
+                    type="button"
+                    class="transition-colors"
+                    :class="activeTags.includes(tag.name)
+                      ? 'text-[var(--reader-accent)]'
+                      : 'text-[var(--reader-muted)] hover:text-[var(--reader-accent)]'"
+                    :aria-pressed="activeTags.includes(tag.name)"
+                    @click="toggleTag(tag.name)"
+                  >
+                    #{{ tag.name }}
+                  </button>
+                </div>
+
                 <p
                   v-if="post.excerpt"
                   :title="post.excerpt"
@@ -226,27 +251,6 @@ function formatDate(date: string) {
                 <p class="mt-3 text-xs tabular-nums text-[var(--reader-muted)]">{{ post.readingTime ?? 1 }} 分钟阅读</p>
               </div>
               <span aria-hidden="true" class="pt-1 text-right text-[var(--reader-accent)]">↗</span>
-            </NuxtLink>
-
-            <!-- 文章自带标签：样式从简，点击等同于点左侧标签；按钮在链接之外，不会触发跳转 -->
-            <div
-              v-if="post.tags?.length"
-              class="tag-text mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px] leading-5 sm:pl-[7.5rem]"
-              aria-label="文章标签"
-            >
-              <button
-                v-for="tag in post.tags"
-                :key="tag.id"
-                type="button"
-                class="transition-colors"
-                :class="activeTags.includes(tag.name)
-                  ? 'text-[var(--reader-accent)]'
-                  : 'text-[var(--reader-muted)] hover:text-[var(--reader-accent)]'"
-                :aria-pressed="activeTags.includes(tag.name)"
-                @click="toggleTag(tag.name)"
-              >
-                #{{ tag.name }}
-              </button>
             </div>
           </li>
         </ul>

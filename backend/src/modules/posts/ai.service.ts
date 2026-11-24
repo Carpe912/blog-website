@@ -1,9 +1,10 @@
 /**
  * AiService — 调用 DeepSeek 模型完成文章相关能力
  *
- * 目前提供两项能力：
+ * 目前提供三项能力：
  *  - 自动生成文章摘要（后台保存文章时使用）
  *  - 提取语义关键词（用于相关文章推荐）
+ *  - 生成文章标签（用于归档与分类，不依赖调用方传参）
  *
  * 使用 DeepSeek 的 OpenAI 兼容接口，无需额外 SDK。
  */
@@ -95,6 +96,59 @@ export class AiService {
         .slice(0, 15);
     } catch (err) {
       this.logger.error('AI 关键词提取失败', err);
+      return [];
+    }
+  }
+
+  /**
+   * 根据标题与正文生成文章标签
+   * @param existing 站点已有标签，命中同义时直接复用，避免同义标签泛滥
+   * @returns 3~5 个标签，失败时返回空数组
+   */
+  async generateTags(
+    title: string,
+    content: string,
+    existing: string[] = [],
+  ): Promise<string[]> {
+    const plain = this.toPlainText(content).slice(0, 3000);
+    if (!plain) return [];
+
+    const reuse = existing
+      .filter((t) => typeof t === 'string' && t.trim())
+      .slice(0, 40)
+      .join('、');
+
+    const prompt = `请给下面这篇文章打 3 到 5 个标签，用于博客归档与筛选。
+
+要求：
+- 标签是这篇文章真正在讲的主题或技术名，例如 deepseek、harness、cordis、prisma、语义检索
+- 每个标签 1 到 3 个词，尽量简短（不超过 12 个字）
+- 英文标签全部小写，中文标签保持原样；不要加 # 号，不要标点符号
+- 只保留贯穿全文的核心主题，不要罗列文中顺带提到的名词
+- 优先复用「已有标签」：语义相同就沿用已有写法，不要造近义新标签
+- 直接返回 JSON 数组，不要任何解释或 markdown
+
+已有标签（可复用）：${reuse || '（暂无）'}
+
+文章标题：${title}
+文章内容：${plain}
+
+返回格式示例：["deepseek", "harness", "上下文管理"]`;
+
+    try {
+      const text = await this.chat(prompt, 160);
+      const match = text.match(/\[[\s\S]*\]/);
+      if (!match) return [];
+
+      const tags = JSON.parse(match[0]) as unknown[];
+      if (!Array.isArray(tags)) return [];
+
+      return tags
+        .filter((t) => typeof t === 'string' && t.trim().length > 0)
+        .map((t) => (t as string).trim())
+        .slice(0, 6);
+    } catch (err) {
+      this.logger.error('AI 标签生成失败', err);
       return [];
     }
   }

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiService } from './ai.service';
 import { EmbeddingService, cosineSimilarity } from './embedding.service';
@@ -81,7 +81,31 @@ function normalizeQuery(raw: string): string {
     .trim();
 }
 
-/** 从标题里切出候选术语：按标点和空格切段，再补上英文技术名词 */function buildTopicTerms(post: any): Set<string> {
+/** 标签名归一化：去 #、去多余标点，英文统一小写 */
+function normalizeTagName(raw: string): string {
+  return String(raw ?? '')
+    .replace(/^[#＃\s]+/, '')
+    .replace(/^["'「『]+|["'」』]+$/g, '')
+    .replace(/[，,、；;。.！!？?]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 24);
+}
+
+/** 由标签名推导 slug：英文转小写连字符，中文保留原字符 */
+function tagSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[’'"]/g, '')
+    .replace(/[\s_]+/g, '-')
+    .replace(/[^a-z0-9\u4e00-\u9fa5+-]/g, '')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60);
+}
+
+/** 从标题里切出候选术语：按标点和空格切段，再补上英文技术名词 */
+function buildTopicTerms(post: any): Set<string> {
   const terms = new Set<string>();
 
   const push = (raw: string) => {
@@ -123,6 +147,7 @@ const POST_SELECT = {
   publishedAt: true,
   createdAt: true,
   updatedAt: true,
+  tags: { select: { tag: { select: { id: true, name: true, slug: true } } } },
 } as const;
 
 /** 列表页同样返回 content，前端据此计算阅读时间 */
@@ -130,6 +155,8 @@ const POST_LIST_SELECT = POST_SELECT;
 
 @Injectable()
 export class PostsService {
+  private readonly logger = new Logger(PostsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
@@ -269,10 +296,15 @@ export class PostsService {
 
   async create(dto: CreatePostDto) {
     const slug = await this.resolveSlug(dto.slug);
-    const excerpt = await this.resolveExcerpt(dto.title, dto.content, dto.excerpt);
     const published = dto.published ?? false;
 
-    const post = await this.prisma.post.create({
+    // 摘要与标签都靠模型生成，并行跑，避免串行等待
+    const [excerpt, tagNames] = await Promise.all([
+      this.resolveExcerpt(dto.title, dto.content, dto.excerpt),
+      this.proposeTags(dto.title, dto.content),
+    ]);
+
+    const created = await this.prisma.post.create({
       data: {
         title: dto.title,
         slug,
@@ -284,13 +316,22 @@ export class PostsService {
       select: POST_SELECT,
     });
 
+    // 标签在响应前写入：接口一返回，文章就带标签，调用方无需传参
+    if (tagNames.length > 0) {
+      try {
+        await this.applyTags(created.id, tagNames);
+      } catch (err) {
+        this.logger.error(`文章 #${created.id} 标签写入失败`, err);
+      }
+    }
+
     // 异步提取 AI 关键词（不阻塞响应）
     if (published) {
-      this._asyncRefreshKeywords(post.id, post.title, dto.content);
+      this._asyncRefreshKeywords(created.id, created.title, dto.content);
     }
 
     this.invalidateCorpusCache();
-    return this.formatPost(post);
+    return this.findOne(created.id);
   }
 
   async update(id: number, dto: UpdatePostDto) {
@@ -354,6 +395,20 @@ export class PostsService {
       if (raw) this._asyncRefreshKeywords(id, raw.title, raw.content);
     }
 
+    // 标签：标题/正文变化，或老文章还没有标签时重新生成（草稿也刷新）
+    const tagsStale =
+      (postData.title != null && postData.title !== current.title) ||
+      contentChanged ||
+      (current.tags?.length ?? 0) === 0;
+
+    if (tagsStale) {
+      this._asyncRefreshTags(
+        id,
+        postData.title ?? current.title,
+        postData.content ?? current.content,
+      );
+    }
+
     return updated;
   }
 
@@ -385,6 +440,39 @@ export class PostsService {
 
     this.invalidateCorpusCache();
     return { id, aiKeywords: keywords };
+  }
+
+  // ── 手动刷新标签（管理接口）─────────────────────────────────────────────
+  async refreshTags(id: number) {
+    const post = await this.prisma.post.findUnique({
+      where: { id },
+      select: { title: true, content: true },
+    });
+    if (!post) throw new NotFoundException(`文章 #${id} 不存在`);
+
+    const tags = await this.syncTags(id, post.title, post.content);
+    return { id, tags };
+  }
+
+  // ── 给存量文章补标签（管理接口，逐篇调用模型，按 id 升序）───────────────
+  async backfillTags(limit = 50) {
+    const posts = await this.prisma.post.findMany({
+      select: { id: true },
+      orderBy: { id: 'asc' },
+      take: Math.min(Math.max(limit, 1), 200),
+    });
+
+    let tagged = 0;
+    for (const { id } of posts) {
+      try {
+        const tags = await this.refreshTags(id);
+        if (tags.tags.length > 0) tagged += 1;
+      } catch (err) {
+        this.logger.error(`文章 #${id} 补标签失败`, err);
+      }
+    }
+
+    return { total: posts.length, tagged };
   }
 
   // ── 上一篇 / 下一篇 ───────────────────────────────────────────────────────
@@ -626,6 +714,116 @@ export class PostsService {
     return plain ? plain.slice(0, 120) : null;
   }
 
+  // ── 私有：标签生成与落库 ─────────────────────────────────────────────────
+  //
+  // 标签完全由正文推导，接口不接收标签参数：
+  //   1. 取站点已有标签（按使用次数倒序前 40 个）交给模型，优先复用同义写法
+  //   2. 模型给出 3~5 个标签 → 归一化、去重、限制数量
+  //   3. 按名称大小写不敏感地复用已有 Tag，缺的补建，再重建该文的关联
+  private async proposeTags(title: string, content: string): Promise<string[]> {
+    let existing: string[] = [];
+    try {
+      const rows = await this.prisma.tag.findMany({
+        select: { name: true },
+        orderBy: { posts: { _count: 'desc' } },
+        take: 40,
+      });
+      existing = rows.map((r) => r.name);
+    } catch {
+      // 标签表尚未建立时仍然生成，只是无法复用已有标签
+    }
+
+    const raw = await this.ai.generateTags(title, content, existing);
+    return this.normalizeTagNames(raw);
+  }
+
+  private normalizeTagNames(raw: string[]): string[] {
+    const names: string[] = [];
+    const seen = new Set<string>();
+
+    for (const item of raw) {
+      const name = normalizeTagName(item);
+      if (!name) continue;
+      // 英文标签统一小写（DeepSeek → deepseek），中文保持原样
+      const normalized = /[\u4e00-\u9fa5]/.test(name) ? name : name.toLowerCase();
+      const key = normalized.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      names.push(normalized);
+      if (names.length >= 5) break;
+    }
+
+    return names;
+  }
+
+  /** 生成标签并写入关联，返回实际落库的标签 */
+  private async syncTags(id: number, title: string, content: string) {
+    const names = await this.proposeTags(title, content);
+    if (names.length === 0) return [];
+    await this.applyTags(id, names);
+    return this.prisma.tag.findMany({
+      where: { posts: { some: { postId: id } } },
+      select: { id: true, name: true, slug: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
+  /** 把标签名写入 PostTag（整体替换，保证与最新正文一致） */
+  private async applyTags(postId: number, names: string[]): Promise<void> {
+    const tagIds: number[] = [];
+    for (const name of names) {
+      tagIds.push(await this.ensureTag(name));
+    }
+
+    await this.prisma.$transaction([
+      this.prisma.postTag.deleteMany({ where: { postId } }),
+      this.prisma.postTag.createMany({
+        data: tagIds.map((tagId) => ({ postId, tagId })),
+        skipDuplicates: true,
+      }),
+    ]);
+  }
+
+  /** 按名称取标签 id，不存在则新建（slug 冲突时自动加后缀）*/
+  private async ensureTag(name: string): Promise<number> {
+    const found = await this.prisma.tag.findFirst({
+      where: { name: { equals: name, mode: 'insensitive' } },
+      select: { id: true },
+    });
+    if (found) return found.id;
+
+    const base = tagSlug(name) || `tag-${Date.now().toString(36)}`;
+
+    for (let i = 0; i < 5; i++) {
+      const slug = i === 0 ? base : `${base}-${i + 1}`;
+      try {
+        const created = await this.prisma.tag.create({
+          data: { name, slug },
+          select: { id: true },
+        });
+        return created.id;
+      } catch (err: any) {
+        // 并发下同名标签已被创建，回查即可
+        const again = await this.prisma.tag.findFirst({
+          where: { name: { equals: name, mode: 'insensitive' } },
+          select: { id: true },
+        });
+        if (again) return again.id;
+        // 只有 slug 撞车才换后缀重试，其它错误直接抛
+        if (err?.code !== 'P2002') throw err;
+      }
+    }
+
+    throw new ConflictException(`标签「${name}」创建失败`);
+  }
+
+  // ── 私有：fire-and-forget 标签刷新 ───────────────────────────────────────
+  private _asyncRefreshTags(id: number, title: string, content: string): void {
+    this.syncTags(id, title, content).catch((err) => {
+      this.logger.error(`文章 #${id} 标签刷新失败`, err);
+    });
+  }
+
   // ── 私有：fire-and-forget 关键词提取 ─────────────────────────────────────
   private _asyncRefreshKeywords(id: number, title: string, content: string): void {
     this.ai
@@ -652,6 +850,10 @@ export class PostsService {
   private formatPost(post: any) {
     // 中文约 400 字/分钟，最少 1 分钟
     const readingTime = Math.max(1, Math.round((post.content ?? '').length / 400));
-    return { ...post, readingTime };
+    // Prisma 返回的是 PostTag 关联数组，摊平成标签对象
+    const tags = Array.isArray(post.tags)
+      ? post.tags.map((item: any) => item.tag).filter(Boolean)
+      : [];
+    return { ...post, tags, readingTime };
   }
 }

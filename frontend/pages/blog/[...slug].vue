@@ -86,6 +86,13 @@ function relatedDate(date: string) {
           <span aria-hidden="true">·</span>
           <span>{{ readingTime }} 分钟阅读</span>
         </div>
+        <ul
+          v-if="post.tags?.length"
+          aria-label="文章标签"
+          class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-[var(--reader-muted)]"
+        >
+          <li v-for="tag in post.tags" :key="tag.id">#{{ tag.name }}</li>
+        </ul>
       </header>
 
       <ArticleToc

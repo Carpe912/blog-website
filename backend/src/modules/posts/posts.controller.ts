@@ -69,6 +69,18 @@ export class PostsController {
     return this.postsService.refreshKeywords(id);
   }
 
+  // 标签由正文自动生成，参数里没有标签字段
+  @Post(':id/refresh-tags')
+  refreshTags(@Param('id', ParseIntPipe) id: number) {
+    return this.postsService.refreshTags(id);
+  }
+
+  // 给存量文章批量补标签（逐篇调用模型，limit 默认 50）
+  @Post('backfill-tags')
+  backfillTags(@Query('limit') limit?: string) {
+    return this.postsService.backfillTags(Number(limit) || 50);
+  }
+
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   remove(@Param('id', ParseIntPipe) id: number) {

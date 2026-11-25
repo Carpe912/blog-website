@@ -21,14 +21,14 @@ if (!post.value) {
   throw createError({ statusCode: 404, statusMessage: '文章不存在' })
 }
 
-// 上一篇 / 下一篇
-const { data: adjacent } = await useAsyncData(
+// 上一篇 / 下一篇：不阻塞正文渲染，数据回来后再补
+const { data: adjacent } = useLazyAsyncData(
   `adjacent-${slug.value}`,
   () => postsApi.getAdjacentBySlug(slug.value),
 )
 
-// 相关文章
-const { data: related } = await useAsyncData(
+// 相关文章：要走外部向量模型（偶尔会慢到数秒），同样放到正文之后异步加载
+const { data: related } = useLazyAsyncData(
   `related-${slug.value}`,
   () => postsApi.getRelatedBySlug(slug.value),
 )

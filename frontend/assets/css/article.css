@@ -11,7 +11,7 @@
   --doc-mark: #fdf0b8;
 
   font-family: var(--reader-body-font);
-  font-size: clamp(1.0625rem, 1rem + 0.25vw, 1.125rem);
+  font-size: 1rem;
   line-height: 1.7;
   color: var(--doc-text);
   overflow-wrap: break-word;

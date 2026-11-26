@@ -64,17 +64,6 @@ onMounted(() => {
 // 标签随文章接口一起返回，直接按全量列表聚合，无需额外请求
 const activeTags = useState<string[]>('blog-tags', () => [])
 
-// 标签区默认收起，并记住用户上次的展开状态
-const tagsOpen = ref(false)
-onMounted(() => {
-  tagsOpen.value = localStorage.getItem('blog-tags-open-v2') === '1'
-})
-
-function onTagsToggle(event: Event) {
-  tagsOpen.value = (event.currentTarget as HTMLDetailsElement).open
-  localStorage.setItem('blog-tags-open-v2', tagsOpen.value ? '1' : '0')
-}
-
 const allTags = computed(() => {
   const map = new Map<string, number>()
   for (const post of allPosts.value) {
@@ -88,6 +77,54 @@ const allTags = computed(() => {
     // 不能用 localeCompare：Node 与浏览器的中文排序规则不同，会导致 SSR 与客户端渲染顺序不一致
     .sort((a, b) => b.count - a.count || (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))
 })
+
+const tagFilters = ref<HTMLElement | null>(null)
+const tagsExpanded = ref(false)
+const compactTagCount = ref<number | null>(null)
+const hasMoreTags = computed(() =>
+  compactTagCount.value !== null && compactTagCount.value < allTags.value.length,
+)
+
+function measureTagRows() {
+  const filters = tagFilters.value
+  if (!filters) return
+
+  // 收起时只隐藏超出的按钮，保留尺寸供窗口缩放后重新测量。
+  const buttons = Array.from(filters.children)
+  const toggleWidth = buttons.pop()!.getBoundingClientRect().width
+  const availableWidth = filters.getBoundingClientRect().width
+  const gap = Number.parseFloat(getComputedStyle(filters).columnGap)
+  let row = 1
+  let rowWidth = 0
+  let lastCompactIndex = 0
+
+  for (const [index, button] of buttons.entries()) {
+    const width = button.getBoundingClientRect().width
+    if (rowWidth && rowWidth + gap + width > availableWidth) {
+      row += 1
+      rowWidth = 0
+    }
+    if (row > 2) break
+
+    rowWidth += rowWidth ? gap + width : width
+    // 第一项是「全部」。第二行需要给末尾的「展开」留位置。
+    if (row === 1 || rowWidth + gap + toggleWidth <= availableWidth) {
+      lastCompactIndex = index
+    }
+  }
+
+  compactTagCount.value = row > 2 ? lastCompactIndex : allTags.value.length
+}
+
+watch(tagFilters, (filters, _, onCleanup) => {
+  if (!filters) return
+  measureTagRows()
+  const observer = new ResizeObserver(measureTagRows)
+  observer.observe(filters)
+  onCleanup(() => observer.disconnect())
+}, { flush: 'post' })
+
+watch([allTags, activeTags], measureTagRows, { flush: 'post' })
 
 const filteredPosts = computed<any[]>(() => {
   // 搜索结果不带 tags，按 id 从全量列表补齐，保证标签筛选对搜索结果同样生效
@@ -133,44 +170,6 @@ function formatDate(date: string) {
     <h1 class="sr-only">文章</h1>
 
     <section aria-label="文章列表">
-      <details
-        v-if="allTags.length"
-        :open="tagsOpen"
-        class="tag-text mb-4 rounded-md border border-[var(--reader-line)]"
-        @toggle="onTagsToggle"
-      >
-        <summary class="cursor-pointer px-4 py-3 text-[15px] font-medium text-[var(--reader-muted)]">
-          标签{{ activeTags.length ? ` · 已选 ${activeTags.length} 个` : '' }}
-          <span class="ml-1 text-[11px] tabular-nums opacity-60">{{ allTags.length }}</span>
-        </summary>
-        <div class="flex max-h-72 flex-wrap items-baseline gap-x-4 gap-y-1.5 overflow-y-auto border-t border-[var(--reader-line)] px-4 py-3 text-[13px]">
-          <button
-            type="button"
-            class="py-0.5 transition-colors"
-            :class="activeTags.length === 0
-              ? 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'
-              : 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'"
-            :aria-pressed="activeTags.length === 0"
-            @click="activeTags = []"
-          >
-            全部<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ allPosts.length }}</span>
-          </button>
-          <button
-            v-for="tag in allTags"
-            :key="tag.name"
-            type="button"
-            class="py-0.5 transition-colors"
-            :class="activeTags.includes(tag.name)
-              ? 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'
-              : 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'"
-            :aria-pressed="activeTags.includes(tag.name)"
-            @click="toggleTag(tag.name)"
-          >
-            #{{ tag.name }}<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ tag.count }}</span>
-          </button>
-        </div>
-      </details>
-
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--reader-line)] pb-4">
         <div role="status" class="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm tabular-nums text-[var(--reader-muted)]">
           <template v-if="error">文章列表</template>
@@ -202,6 +201,53 @@ function formatDate(date: string) {
             class="min-h-10 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-[var(--reader-ink)] placeholder:text-[var(--reader-muted)]"
           />
         </label>
+      </div>
+
+      <div v-if="allTags.length" class="tag-text mt-4 rounded-md border border-[var(--reader-line)] px-4 py-3">
+        <div
+          ref="tagFilters"
+          role="group"
+          aria-label="标签筛选"
+          class="relative flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[13px] leading-5"
+          :class="compactTagCount === null && 'max-h-14 overflow-clip'"
+        >
+          <button
+            type="button"
+            class="max-w-full truncate py-0.5 transition-colors"
+            :class="activeTags.length === 0
+              ? 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'
+              : 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]'"
+            :aria-pressed="activeTags.length === 0"
+            @click="activeTags = []"
+          >
+            全部<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ allPosts.length }}</span>
+          </button>
+          <button
+            v-for="(tag, index) in allTags"
+            :key="tag.name"
+            type="button"
+            class="max-w-full truncate py-0.5 transition-colors"
+            :class="[
+              activeTags.includes(tag.name)
+                ? 'font-medium text-[var(--reader-ink)] underline decoration-[var(--reader-accent)] underline-offset-4'
+                : 'text-[var(--reader-muted)] hover:text-[var(--reader-ink)]',
+              !tagsExpanded && compactTagCount !== null && index >= compactTagCount && 'absolute left-0 top-0 invisible',
+            ]"
+            :aria-pressed="activeTags.includes(tag.name)"
+            @click="toggleTag(tag.name)"
+          >
+            #{{ tag.name }}<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ tag.count }}</span>
+          </button>
+          <button
+            type="button"
+            class="w-8 shrink-0 whitespace-nowrap py-0.5 text-left text-[var(--reader-accent)] underline-offset-4 hover:underline"
+            :class="!hasMoreTags && 'absolute left-0 top-0 invisible'"
+            :aria-expanded="tagsExpanded"
+            @click="tagsExpanded = !tagsExpanded"
+          >
+            {{ tagsExpanded ? '收起' : '展开' }}
+          </button>
+        </div>
       </div>
 
       <ul v-if="filteredPosts.length" class="divide-y divide-[var(--reader-line)] border-b border-[var(--reader-line)]">

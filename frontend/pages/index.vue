@@ -3,6 +3,11 @@ definePageMeta({ layout: 'default' })
 
 const config = useRuntimeConfig()
 const postsApi = usePostsApi()
+const archiveView = useCookie<'list' | 'cards'>('blog-archive-view', {
+  maxAge: 60 * 60 * 24 * 365,
+  sameSite: 'lax',
+})
+const showCards = computed(() => archiveView.value === 'cards')
 
 useSeoMeta({
   title: config.public.siteName,
@@ -166,7 +171,7 @@ function formatDate(date: string) {
 </script>
 
 <template>
-  <div class="reader-column pb-20 pt-8 sm:pt-12">
+  <div class="pb-20 pt-8 sm:pt-12" :class="showCards ? 'archive-wide' : 'reader-column'">
     <h1 class="sr-only">文章</h1>
 
     <section aria-label="文章列表">
@@ -189,18 +194,24 @@ function formatDate(date: string) {
             <span>{{ statusText }}</span>
           </template>
         </div>
-        <label class="archive-search flex w-full items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56">
-          <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-            <path d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
-          </svg>
-          <input
-            v-model="searchQuery"
-            type="search"
-            aria-label="搜索文章"
-            placeholder="搜索文章"
-            class="min-h-10 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-[var(--reader-ink)] placeholder:text-[var(--reader-muted)]"
-          />
-        </label>
+        <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <label class="archive-search flex min-w-0 flex-1 basis-36 items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56 sm:flex-none">
+            <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+              <path d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
+            </svg>
+            <input
+              v-model="searchQuery"
+              type="search"
+              aria-label="搜索文章"
+              placeholder="搜索文章"
+              class="min-h-10 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-[var(--reader-ink)] placeholder:text-[var(--reader-muted)]"
+            />
+          </label>
+          <div role="group" aria-label="文章视图" class="archive-views flex shrink-0 gap-0.5 rounded-md border border-[var(--reader-line)] p-0.5 text-sm">
+            <button type="button" :aria-pressed="!showCards" @click="archiveView = 'list'">列表</button>
+            <button type="button" :aria-pressed="showCards" @click="archiveView = 'cards'">卡片</button>
+          </div>
+        </div>
       </div>
 
       <div v-if="allTags.length" class="tag-text mt-4 rounded-md border border-[var(--reader-line)] px-4 py-3">
@@ -250,7 +261,7 @@ function formatDate(date: string) {
         </div>
       </div>
 
-      <ul v-if="filteredPosts.length" class="divide-y divide-[var(--reader-line)] border-b border-[var(--reader-line)]">
+      <ul v-if="filteredPosts.length && !showCards" class="divide-y divide-[var(--reader-line)] border-b border-[var(--reader-line)]">
         <li v-for="post in filteredPosts" :key="post.id" class="group relative py-6 sm:py-8">
           <div class="grid grid-cols-[minmax(0,1fr)_1.25rem] items-start gap-x-4 gap-y-2 sm:grid-cols-[6rem_minmax(0,1fr)_1.25rem] sm:gap-x-6">
             <time
@@ -305,6 +316,46 @@ function formatDate(date: string) {
         </li>
       </ul>
 
+      <ul v-else-if="filteredPosts.length" class="archive-cards mt-5 grid gap-4 sm:gap-5">
+        <li
+          v-for="post in filteredPosts"
+          :key="post.id"
+          class="group relative flex min-h-48 min-w-0 flex-col rounded-xl border border-[var(--reader-line)] bg-[var(--reader-surface)] p-5 transition-colors focus-within:border-[var(--reader-accent)] hover:border-[var(--reader-accent)]"
+        >
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--reader-muted)]">
+            <time :datetime="post.createdAt">{{ formatDate(post.createdAt) }}</time>
+            <span class="ml-auto">{{ post.readingTime ?? 1 }} 分钟阅读</span>
+            <span aria-hidden="true" class="text-base leading-none text-[var(--reader-accent)]">↗</span>
+          </div>
+          <h2 class="reader-display mt-3 text-xl font-bold leading-snug">
+            <NuxtLink
+              :to="`/blog/${post.slug}`"
+              class="transition-colors group-hover:text-[var(--reader-accent)] after:absolute after:inset-0 after:rounded-xl after:content-['']"
+            >
+              <span class="line-clamp-3">{{ post.title }}</span>
+            </NuxtLink>
+          </h2>
+          <p v-if="post.excerpt" class="reader-display mt-2 line-clamp-3 text-sm leading-relaxed text-[var(--reader-muted)]">
+            {{ post.excerpt }}
+          </p>
+          <div v-if="post.tags?.length" role="group" aria-label="文章标签" class="tag-text mt-auto flex flex-wrap gap-1.5 pt-4 text-xs">
+            <button
+              v-for="tag in post.tags"
+              :key="tag.id"
+              type="button"
+              class="relative z-10 max-w-full truncate rounded border bg-[var(--reader-paper)] px-2 py-0.5 transition-colors hover:border-[var(--reader-accent)] hover:text-[var(--reader-accent)]"
+              :class="activeTags.includes(tag.name)
+                ? 'border-[var(--reader-accent)] text-[var(--reader-accent)]'
+                : 'border-[var(--reader-line)] text-[var(--reader-muted)]'"
+              :aria-pressed="activeTags.includes(tag.name)"
+              @click="toggleTag(tag.name)"
+            >
+              #{{ tag.name }}
+            </button>
+          </div>
+        </li>
+      </ul>
+
       <p v-else class="border-b border-[var(--reader-line)] py-16 text-center text-sm text-[var(--reader-muted)]">
         {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : activeTags.length ? '所选标签下暂无文章' : '暂无文章' }}
       </p>
@@ -313,6 +364,31 @@ function formatDate(date: string) {
 </template>
 
 <style scoped>
+.archive-wide {
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.archive-cards {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+}
+
+.archive-views button {
+  min-height: 2.25rem;
+  padding-inline: 0.75rem;
+  border-radius: 0.25rem;
+  color: var(--reader-muted);
+}
+
+.archive-views button:hover {
+  color: var(--reader-ink);
+}
+
+.archive-views button[aria-pressed="true"] {
+  background: var(--reader-surface);
+  color: var(--reader-ink);
+  font-weight: 600;
+}
+
 .archive-search:focus-within {
   outline: 2px solid var(--reader-accent);
   outline-offset: 2px;

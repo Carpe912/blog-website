@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { indexArticleSeries, type ArchivePost, type ArticleSeries } from '~/utils/articleSeries'
+
 definePageMeta({ layout: 'default' })
 
 const config = useRuntimeConfig()
@@ -20,8 +22,8 @@ const { data: postsData, error } = await useAsyncData('all-posts', () =>
   postsApi.list({ published: 'true', limit: 1000 }),
 )
 
-const allPosts = computed<any[]>(() => {
-  const list = ((postsData.value as any)?.data ?? []) as any[]
+const allPosts = computed<ArchivePost[]>(() => {
+  const list = (postsData.value?.data ?? []) as ArchivePost[]
   // 列表统一按创建时间倒序，避免接口排序变化导致顺序不稳
   return [...list].sort(
     (a, b) =>
@@ -31,7 +33,7 @@ const allPosts = computed<any[]>(() => {
 
 // 搜索：走接口的语义搜索，能按「概念」找文章（如搜 cordis 会带出讲 Cordis 的几篇）
 const searchQuery = useState('blog-search', () => '')
-const searchResults = ref<any[] | null>(null)
+const searchResults = ref<ArchivePost[] | null>(null)
 const searching = ref(false)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -131,17 +133,36 @@ watch(tagFilters, (filters, _, onCleanup) => {
 
 watch([allTags, activeTags], measureTagRows, { flush: 'post' })
 
-const filteredPosts = computed<any[]>(() => {
+const filteredPosts = computed(() => {
   // 搜索结果不带 tags，按 id 从全量列表补齐，保证标签筛选对搜索结果同样生效
-  const tagsById = new Map(allPosts.value.map((p: any) => [p.id, p.tags ?? []]))
+  const tagsById = new Map(allPosts.value.map(p => [p.id, p.tags ?? []]))
   const source = (Array.isArray(searchResults.value) ? searchResults.value : allPosts.value).map(
-    (p: any) => ({ ...p, tags: p.tags?.length ? p.tags : tagsById.get(p.id) ?? [] }),
+    p => ({ ...p, tags: p.tags?.length ? p.tags : tagsById.get(p.id) ?? [] }),
   )
   // 多选按「任一命中」取并集；一个都没选时不过滤，等同于全部
   if (activeTags.value.length === 0) return source
-  return source.filter((p: any) =>
-    p.tags.some((t: any) => activeTags.value.includes(t.name)),
+  return source.filter(p =>
+    p.tags.some(t => activeTags.value.includes(t.name)),
   )
+})
+
+const seriesBySlug = computed(() => indexArticleSeries(allPosts.value))
+const selectedSeries = shallowRef<ArticleSeries | null>(null)
+
+type ArchiveCard = { series: ArticleSeries; key: string } | { post: ArchivePost; key: string }
+const archiveCards = computed(() => {
+  const cards: ArchiveCard[] = []
+  const seen = new Set<ArticleSeries>()
+  for (const post of filteredPosts.value) {
+    const series = seriesBySlug.value.get(post.slug)
+    if (!series) {
+      cards.push({ post, key: post.slug })
+    } else if (!seen.has(series)) {
+      cards.push({ series, key: `series:${series.title}` })
+      seen.add(series)
+    }
+  }
+  return cards
 })
 
 function toggleTag(name: string) {
@@ -316,50 +337,69 @@ function formatDate(date: string) {
         </li>
       </ul>
 
-      <ul v-else-if="filteredPosts.length" class="archive-cards mt-5 grid gap-4 sm:gap-5">
-        <li
-          v-for="post in filteredPosts"
-          :key="post.id"
-          class="group relative flex min-h-48 min-w-0 flex-col rounded-xl border border-[var(--reader-line)] bg-[var(--reader-surface)] p-5 transition-colors focus-within:border-[var(--reader-accent)] hover:border-[var(--reader-accent)]"
-        >
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--reader-muted)]">
-            <time :datetime="post.createdAt">{{ formatDate(post.createdAt) }}</time>
-            <span class="ml-auto">{{ post.readingTime ?? 1 }} 分钟阅读</span>
-            <span aria-hidden="true" class="text-base leading-none text-[var(--reader-accent)]">↗</span>
-          </div>
-          <h2 class="reader-display mt-3 text-xl font-bold leading-snug">
-            <NuxtLink
-              :to="`/blog/${post.slug}`"
-              class="transition-colors group-hover:text-[var(--reader-accent)] after:absolute after:inset-0 after:rounded-xl after:content-['']"
-            >
-              <span class="line-clamp-3">{{ post.title }}</span>
-            </NuxtLink>
-          </h2>
-          <p v-if="post.excerpt" class="reader-display mt-2 line-clamp-3 text-sm leading-relaxed text-[var(--reader-muted)]">
-            {{ post.excerpt }}
-          </p>
-          <div v-if="post.tags?.length" role="group" aria-label="文章标签" class="tag-text mt-auto flex flex-wrap gap-1.5 pt-4 text-xs">
+      <ul v-else-if="archiveCards.length" class="archive-cards mt-5 grid gap-4 sm:gap-5">
+        <template v-for="card in archiveCards" :key="card.key">
+          <li v-if="'series' in card" class="archive-series relative isolate grid min-w-0">
             <button
-              v-for="tag in post.tags"
-              :key="tag.id"
               type="button"
-              class="relative z-10 max-w-full truncate rounded border bg-[var(--reader-paper)] px-2 py-0.5 transition-colors hover:border-[var(--reader-accent)] hover:text-[var(--reader-accent)]"
-              :class="activeTags.includes(tag.name)
-                ? 'border-[var(--reader-accent)] text-[var(--reader-accent)]'
-                : 'border-[var(--reader-line)] text-[var(--reader-muted)]'"
-              :aria-pressed="activeTags.includes(tag.name)"
-              @click="toggleTag(tag.name)"
+              aria-haspopup="dialog"
+              class="archive-series-front flex min-h-48 min-w-0 flex-col rounded-xl border p-5 text-left transition-colors"
+              @click="selectedSeries = card.series"
             >
-              #{{ tag.name }}
+              <span class="text-xs font-medium tabular-nums text-[var(--reader-accent)]">系列 · {{ card.series.count }} 篇</span>
+              <span class="reader-display mt-3 line-clamp-3 text-xl font-bold leading-snug">{{ card.series.title }}</span>
+              <span v-if="card.series.description" class="reader-display mt-2 line-clamp-2 text-sm leading-relaxed text-[var(--reader-muted)]">{{ card.series.description }}</span>
+              <span class="mt-auto pt-3">
+                <span class="flex items-center justify-between gap-2 border-t border-[var(--reader-line)] pt-2 text-sm font-medium text-[var(--reader-accent)]">
+                  查看系列目录 <span aria-hidden="true">→</span>
+                </span>
+              </span>
             </button>
-          </div>
-        </li>
+          </li>
+          <li
+            v-else
+            class="group relative flex min-h-48 min-w-0 flex-col rounded-xl border border-[var(--reader-line)] bg-[var(--reader-surface)] p-5 transition-colors focus-within:border-[var(--reader-accent)] hover:border-[var(--reader-accent)]"
+          >
+            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--reader-muted)]">
+              <time :datetime="card.post.createdAt">{{ formatDate(card.post.createdAt) }}</time>
+              <span class="ml-auto">{{ card.post.readingTime ?? 1 }} 分钟阅读</span>
+              <span aria-hidden="true" class="text-base leading-none text-[var(--reader-accent)]">↗</span>
+            </div>
+            <h2 class="reader-display mt-3 text-xl font-bold leading-snug">
+              <NuxtLink
+                :to="`/blog/${card.post.slug}`"
+                class="transition-colors group-hover:text-[var(--reader-accent)] after:absolute after:inset-0 after:rounded-xl after:content-['']"
+              >
+                <span class="line-clamp-3">{{ card.post.title }}</span>
+              </NuxtLink>
+            </h2>
+            <p v-if="card.post.excerpt" class="reader-display mt-2 line-clamp-3 text-sm leading-relaxed text-[var(--reader-muted)]">
+              {{ card.post.excerpt }}
+            </p>
+            <div v-if="card.post.tags?.length" role="group" aria-label="文章标签" class="tag-text mt-auto flex flex-wrap gap-1.5 pt-4 text-xs">
+              <button
+                v-for="tag in card.post.tags"
+                :key="tag.id"
+                type="button"
+                class="relative z-10 max-w-full truncate rounded border bg-[var(--reader-paper)] px-2 py-0.5 transition-colors hover:border-[var(--reader-accent)] hover:text-[var(--reader-accent)]"
+                :class="activeTags.includes(tag.name)
+                  ? 'border-[var(--reader-accent)] text-[var(--reader-accent)]'
+                  : 'border-[var(--reader-line)] text-[var(--reader-muted)]'"
+                :aria-pressed="activeTags.includes(tag.name)"
+                @click="toggleTag(tag.name)"
+              >
+                #{{ tag.name }}
+              </button>
+            </div>
+          </li>
+        </template>
       </ul>
 
       <p v-else class="border-b border-[var(--reader-line)] py-16 text-center text-sm text-[var(--reader-muted)]">
         {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : activeTags.length ? '所选标签下暂无文章' : '暂无文章' }}
       </p>
     </section>
+    <ArticleSeriesDialog v-if="selectedSeries" :series="selectedSeries" @close="selectedSeries = null" />
   </div>
 </template>
 
@@ -370,6 +410,42 @@ function formatDate(date: string) {
 
 .archive-cards {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  grid-auto-rows: 1fr;
+}
+
+.archive-series {
+  --series-border: color-mix(in srgb, var(--reader-line) 74%, var(--reader-accent));
+  --series-page: color-mix(in srgb, var(--reader-surface) 94%, var(--reader-accent));
+}
+
+.archive-series::before,
+.archive-series::after {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: 1px solid var(--series-border);
+  border-radius: 0.75rem;
+  pointer-events: none;
+  content: '';
+}
+
+.archive-series::before {
+  transform: translate(7px, 10px);
+  background: color-mix(in srgb, var(--series-page) 84%, var(--reader-accent));
+}
+
+.archive-series::after {
+  transform: translate(3.5px, 5px);
+  background: color-mix(in srgb, var(--series-page) 92%, var(--reader-accent));
+}
+
+.archive-series-front {
+  border-color: var(--series-border);
+  background: var(--series-page);
+}
+
+.archive-series-front:is(:hover, :focus-visible) {
+  border-color: var(--reader-accent);
 }
 
 .archive-views button {

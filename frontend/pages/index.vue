@@ -7,7 +7,7 @@ const archiveView = useCookie<'list' | 'cards'>('blog-archive-view', {
   maxAge: 60 * 60 * 24 * 365,
   sameSite: 'lax',
 })
-const showCards = computed(() => archiveView.value === 'cards')
+const showCards = computed(() => archiveView.value !== 'list')
 
 useSeoMeta({
   title: config.public.siteName,

@@ -133,12 +133,11 @@ export function indexArticleGroups(posts: ArchivePost[]) {
           })
         }
         positions.set(post.slug, articlePositions)
-        if (series && series.count > 1) bySeries.set(post.slug, series)
+        if (series) bySeries.set(post.slug, series)
       }
     }
 
     for (const [index, section] of namedTopics.entries()) {
-      if (section.chapters.length < 2) continue
       const topic: ArticleGroup = {
         kind: 'topic',
         key: `topic:${JSON.stringify([title, section.topic])}`,

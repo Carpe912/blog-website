@@ -1,12 +1,21 @@
 <script setup lang="ts">
 import type { ArticleGroup } from '~/utils/articleSeries'
 
-const props = defineProps<{ group: ArticleGroup }>()
+const props = defineProps<{ group: ArticleGroup; currentSlug?: string }>()
 const groupLabel = computed(() => props.group.kind === 'topic' ? '专题' : '系列')
 const emit = defineEmits<{ close: [] }>()
 const dialog = ref<HTMLDialogElement | null>(null)
+const catalog = ref<HTMLElement | null>(null)
 
-onMounted(() => dialog.value?.showModal())
+onMounted(() => {
+  dialog.value?.showModal()
+  const region = catalog.value
+  const current = region?.querySelector<HTMLElement>('[aria-current="location"]')
+  if (!region || !current) return
+
+  const offset = current.getBoundingClientRect().top - region.getBoundingClientRect().top
+  region.scrollTop += offset - (region.clientHeight - current.offsetHeight) / 2
+})
 
 function closeOnBackdrop(event: MouseEvent) {
   if (event.target === dialog.value) dialog.value?.close()
@@ -40,7 +49,7 @@ function closeOnBackdrop(event: MouseEvent) {
         <span aria-hidden="true">×</span>
       </button>
     </header>
-    <div class="min-h-0 overflow-y-auto overscroll-contain px-4 pb-3 sm:px-5" :aria-label="`${groupLabel}文章目录`" role="region">
+    <div ref="catalog" class="min-h-0 overflow-y-auto overscroll-contain px-4 pb-3 sm:px-5" :aria-label="`${groupLabel}文章目录`" role="region">
       <section v-for="section in group.sections" :key="section.topic" class="mt-3">
         <h3 v-if="section.topic" class="mb-1 text-xs font-semibold tracking-wide text-[var(--reader-muted)]">{{ section.topic }}</h3>
         <ul class="divide-y divide-[var(--reader-line)]">
@@ -48,13 +57,16 @@ function closeOnBackdrop(event: MouseEvent) {
             <NuxtLink
               :to="`/blog/${chapter.post.slug}`"
               :prefetch="false"
+              :aria-current="chapter.post.slug === currentSlug ? 'location' : undefined"
               class="group flex min-h-11 items-baseline gap-2.5 rounded-sm px-0.5 py-2.5 hover:bg-[var(--reader-surface)] hover:text-[var(--reader-accent)]"
+              :class="{ 'bg-[var(--reader-surface)] ring-1 ring-inset ring-[var(--reader-line)]': chapter.post.slug === currentSlug }"
             >
               <span v-if="chapter.number" class="w-[5ch] shrink-0 text-xs tabular-nums text-[var(--reader-muted)]">
                 {{ String(chapter.number).padStart(2, '0') }}<template v-if="chapter.total">/{{ chapter.total }}</template>
               </span>
               <span class="reader-display min-w-0 flex-1 text-[15px] leading-relaxed">{{ chapter.post.title }}</span>
-              <span aria-hidden="true" class="ml-auto shrink-0 text-sm text-[var(--reader-accent)]">↗</span>
+              <span v-if="chapter.post.slug === currentSlug" class="ml-auto shrink-0 text-[11px] text-[var(--reader-accent)]">当前文章</span>
+              <span v-else aria-hidden="true" class="ml-auto shrink-0 text-sm text-[var(--reader-accent)]">↗</span>
             </NuxtLink>
           </li>
         </ul>

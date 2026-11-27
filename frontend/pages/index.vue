@@ -185,7 +185,12 @@ const filteredPosts = computed(() => {
   )
 })
 
-const selectedGroup = shallowRef<ArticleGroup | null>(null)
+const openCatalog = shallowRef<{ group: ArticleGroup; currentSlug?: string } | null>(null)
+
+function openArticleCatalog(slug: string, kind: ArticlePosition['kind']) {
+  const group = articleGroups.value[kind].get(slug)
+  if (group) openCatalog.value = { group, currentSlug: slug }
+}
 
 type ArchiveCard = { group: ArticleGroup; key: string }
   | { post: ArchivePost; key: string; positions: ArticlePosition[] }
@@ -196,7 +201,7 @@ const archiveCards = computed(() => {
   const seen = new Set<ArticleGroup>()
   for (const post of filteredPosts.value) {
     const group = groupsBySlug?.get(post.slug)
-    if (!group) {
+    if (!group || group.count < 2) {
       cards.push({ post, key: post.slug, positions: groups.positions.get(post.slug) ?? [] })
     } else if (!seen.has(group)) {
       cards.push({ group, key: group.key })
@@ -337,12 +342,12 @@ function formatDate(date: string) {
 
       <ul v-if="archiveCards.length" class="archive-cards mt-5 grid gap-4 sm:gap-5">
         <template v-for="card in archiveCards" :key="card.key">
-          <li v-if="'group' in card" class="archive-stack relative isolate grid min-w-0">
+          <li v-if="'group' in card" :data-kind="card.group.kind" class="archive-stack relative isolate grid min-w-0">
             <button
               type="button"
               aria-haspopup="dialog"
               class="archive-stack-front flex min-h-48 min-w-0 flex-col rounded-xl border p-5 text-left transition-colors"
-              @click="selectedGroup = card.group"
+              @click="openCatalog = { group: card.group }"
             >
               <span class="text-xs tabular-nums text-[var(--reader-muted)]">
                 {{ card.group.kind === 'topic' ? '专题' : '系列' }}
@@ -398,15 +403,20 @@ function formatDate(date: string) {
                   #{{ tag.name }}
                 </button>
               </div>
-              <dl v-if="card.positions.length" class="card-placement space-y-1">
-                <div v-for="position in card.positions" :key="position.kind" class="flex items-baseline gap-2">
-                  <dt class="card-placement-label">{{ position.kind === 'series' ? '所属系列' : '所属专题' }}</dt>
-                  <dd class="flex min-w-0 flex-1 items-baseline gap-2">
-                    <span class="min-w-0 flex-1 break-words font-medium">{{ position.title }}</span>
-                    <span class="shrink-0 tabular-nums">{{ position.index }}/{{ position.total }}</span>
-                  </dd>
-                </div>
-              </dl>
+              <div v-if="card.positions.length" role="group" aria-label="文章归属" class="card-placement">
+                <button
+                  v-for="position in card.positions"
+                  :key="position.kind"
+                  type="button"
+                  aria-haspopup="dialog"
+                  class="relative z-10 flex min-h-6 w-full items-baseline gap-2 rounded-sm py-0.5 text-left hover:text-[var(--reader-ink)]"
+                  @click="openArticleCatalog(card.post.slug, position.kind)"
+                >
+                  <span class="card-placement-label">{{ position.kind === 'series' ? '所属系列' : '所属专题' }}</span>
+                  <span class="min-w-0 flex-1 break-words font-medium underline decoration-[var(--reader-line)] underline-offset-2">{{ position.title }}</span>
+                  <span class="shrink-0 tabular-nums">{{ position.index }}/{{ position.total }}</span>
+                </button>
+              </div>
             </div>
           </li>
         </template>
@@ -416,7 +426,12 @@ function formatDate(date: string) {
         {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : activeTags.length ? '所选标签下暂无文章' : '暂无文章' }}
       </p>
     </section>
-    <ArticleGroupDialog v-if="selectedGroup" :group="selectedGroup" @close="selectedGroup = null" />
+    <ArticleGroupDialog
+      v-if="openCatalog"
+      :group="openCatalog.group"
+      :current-slug="openCatalog.currentSlug"
+      @close="openCatalog = null"
+    />
   </div>
 </template>
 
@@ -430,30 +445,40 @@ function formatDate(date: string) {
   grid-auto-rows: 1fr;
 }
 
-.archive-stack::before,
+.archive-stack {
+  --stack-face: color-mix(in srgb, var(--reader-surface) 95%, var(--reader-ink));
+  --stack-line: color-mix(in srgb, var(--reader-line) 94%, var(--reader-ink));
+}
+
+.archive-stack[data-kind="series"] {
+  --stack-face: color-mix(in srgb, var(--reader-surface) 94%, var(--reader-accent));
+  --stack-line: color-mix(in srgb, var(--reader-line) 90%, var(--reader-accent));
+}
+
+.archive-stack[data-kind="series"]::before,
 .archive-stack::after {
   position: absolute;
   inset: 0;
   z-index: -1;
-  border: 1px solid var(--reader-line);
+  border: 1px solid var(--stack-line);
   border-radius: 0.75rem;
   pointer-events: none;
   content: '';
 }
 
-.archive-stack::before {
+.archive-stack[data-kind="series"]::before {
   transform: translate(7px, 10px);
-  background: color-mix(in srgb, var(--reader-surface) 91%, var(--reader-ink));
+  background: color-mix(in srgb, var(--stack-face) 91%, var(--reader-ink));
 }
 
 .archive-stack::after {
   transform: translate(3.5px, 5px);
-  background: color-mix(in srgb, var(--reader-surface) 96%, var(--reader-ink));
+  background: color-mix(in srgb, var(--stack-face) 96%, var(--reader-ink));
 }
 
 .archive-stack-front {
-  border-color: var(--reader-line);
-  background: var(--reader-surface);
+  border-color: var(--stack-line);
+  background: var(--stack-face);
 }
 
 .archive-stack-front:is(:hover, :focus-visible) {

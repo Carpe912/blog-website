@@ -62,8 +62,8 @@ function closeOnBackdrop(event: MouseEvent) {
 
 <style scoped>
 .series-dialog {
-  width: min(39rem, calc(100% - 2rem));
-  max-height: min(36rem, calc(100dvh - 2rem));
+  width: min(43.875rem, calc(100% - 2rem));
+  max-height: min(40.5rem, calc(100dvh - 2rem));
 }
 
 .series-dialog::backdrop {

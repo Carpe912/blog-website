@@ -165,6 +165,8 @@ const filteredPosts = computed(() => {
 })
 
 const openCatalog = shallowRef<{ group: ArticleGroup; currentSlug?: string } | null>(null)
+// 学习路线弹窗：按依赖顺序排的 95 篇，数据在 utils/learningPath.ts
+const openLearningPath = ref(false)
 
 function openArticleCatalog(slug: string, groupKey: string) {
   const group = articleGroups.value.byKey.get(groupKey)
@@ -374,9 +376,16 @@ function formatDate(date: string) {
             />
           </label>
           <button
-            v-if="sections.length > 1"
             type="button"
             class="ml-auto flex min-h-[2.625rem] shrink-0 items-center rounded-md border border-[var(--reader-line)] px-3 text-sm text-[var(--reader-muted)] transition-colors hover:text-[var(--reader-ink)]"
+            @click="openLearningPath = true"
+          >
+            学习路线
+          </button>
+          <button
+            v-if="sections.length > 1"
+            type="button"
+            class="flex min-h-[2.625rem] shrink-0 items-center rounded-md border border-[var(--reader-line)] px-3 text-sm text-[var(--reader-muted)] transition-colors hover:text-[var(--reader-ink)]"
             :title="allCollapsed ? '展开所有分组' : '折叠所有分组后可拖动调整系列顺序'"
             @click="toggleAllSections"
           >
@@ -618,6 +627,7 @@ function formatDate(date: string) {
       :current-slug="openCatalog.currentSlug"
       @close="openCatalog = null"
     />
+    <LearningPathDialog v-if="openLearningPath" @close="openLearningPath = false" />
   </div>
 </template>
 

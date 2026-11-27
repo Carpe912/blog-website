@@ -6,21 +6,21 @@ definePageMeta({ layout: 'default' })
 const config = useRuntimeConfig()
 const postsApi = usePostsApi()
 
-const groupingOptions = [
-  { value: 'article', label: '逐篇显示' },
-  { value: 'topic', label: '按专题分组' },
-  { value: 'series', label: '按系列分组' },
+// ── 显示方式：卡片 / 列表 ────────────────────────────────────────────────
+// 默认列表（信息密度高、按系列分组好扫读），需要摘要卡片时再切到卡片视图。
+// 列表在前，和默认视图保持一致。
+const viewOptions = [
+  { value: 'list', label: '列表视图' },
+  { value: 'card', label: '卡片视图' },
 ] as const
-type GroupingMode = typeof groupingOptions[number]['value']
-const groupingPreference = useCookie<GroupingMode>('blog-archive-grouping', {
+type ViewMode = typeof viewOptions[number]['value']
+const viewPreference = useCookie<ViewMode>('blog-archive-view', {
   maxAge: 60 * 60 * 24 * 365,
   sameSite: 'lax',
 })
-const grouping = computed<GroupingMode>({
-  get: () => groupingPreference.value === 'topic' || groupingPreference.value === 'series'
-    ? groupingPreference.value
-    : 'article',
-  set: value => { groupingPreference.value = value },
+const view = computed<ViewMode>({
+  get: () => (viewPreference.value === 'card' ? 'card' : 'list'),
+  set: value => { viewPreference.value = value },
 })
 
 useSeoMeta({
@@ -32,6 +32,10 @@ useSeoMeta({
 
 const { data: postsData, error } = await useAsyncData('all-posts', () =>
   postsApi.list({ published: 'true', limit: 1000 }),
+  {
+    // 从详情页返回首页时复用已加载的列表，避免每次都重新拉全量数据
+    getCachedData: key => useNuxtApp().payload.data[key] ?? useNuxtApp().static.data[key],
+  },
 )
 
 const allPosts = computed<ArchivePost[]>(() => {
@@ -44,53 +48,6 @@ const allPosts = computed<ArchivePost[]>(() => {
 })
 
 const articleGroups = computed(() => indexArticleGroups(allPosts.value))
-const activeSeries = useState<string[]>('blog-series-filters', () => [])
-const selectedSeries = computed(() => new Set(activeSeries.value))
-const postIdsBySeries = computed(() => {
-  const idsBySeries = new Map<string, Set<number>>()
-  for (const post of allPosts.value) {
-    for (const { kind, title } of articleGroups.value.positions.get(post.slug) ?? []) {
-      if (kind !== 'series') continue
-      if (!idsBySeries.has(title)) idsBySeries.set(title, new Set())
-      idsBySeries.get(title)!.add(post.id)
-    }
-  }
-  return idsBySeries
-})
-const seriesOptions = computed(() => [...postIdsBySeries.value.keys()])
-const seriesScope = computed(() => {
-  if (!selectedSeries.value.size) return undefined
-  const scope = new Set<number>()
-  for (const title of selectedSeries.value) {
-    for (const id of postIdsBySeries.value.get(title) ?? []) scope.add(id)
-  }
-  return scope
-})
-const seriesPosts = computed(() => {
-  const scope = seriesScope.value
-  return scope ? allPosts.value.filter(post => scope.has(post.id)) : allPosts.value
-})
-
-watch(seriesOptions, (options) => {
-  const available = activeSeries.value.filter(title => options.includes(title))
-  if (available.length !== activeSeries.value.length) activeSeries.value = available
-}, { immediate: true })
-
-const seriesFilter = ref<HTMLDetailsElement | null>(null)
-function closeSeriesFilter(event: Event) {
-  const filter = seriesFilter.value
-  if (filter?.open && !filter.contains(event.target as Node)) filter.open = false
-}
-
-function dismissSeriesFilter() {
-  const filter = seriesFilter.value
-  if (!filter?.open) return
-  filter.open = false
-  filter.querySelector('summary')?.focus()
-}
-
-onMounted(() => document.addEventListener('click', closeSeriesFilter))
-onUnmounted(() => document.removeEventListener('click', closeSeriesFilter))
 
 // 搜索：走接口的语义搜索，能按「概念」找文章（如搜 cordis 会带出讲 Cordis 的几篇）
 const searchQuery = useState('blog-search', () => '')
@@ -108,11 +65,10 @@ function queueSearch() {
     searching.value = false
     return
   }
-  const scope = seriesScope.value
   searching.value = true
   searchTimer = setTimeout(async () => {
     try {
-      const posts = await postsApi.search(q, 20, scope ? [...scope] : undefined)
+      const posts = await postsApi.search(q, 20)
       if (request === searchRequest) searchResults.value = posts
     } catch {
       if (request === searchRequest) searchResults.value = []
@@ -122,7 +78,7 @@ function queueSearch() {
   }, 250)
 }
 
-watch([searchQuery, seriesScope], queueSearch)
+watch(searchQuery, queueSearch)
 onMounted(queueSearch)
 onUnmounted(() => {
   if (searchTimer) clearTimeout(searchTimer)
@@ -135,7 +91,7 @@ const activeTags = useState<string[]>('blog-tags', () => [])
 
 const allTags = computed(() => {
   const map = new Map<string, number>()
-  for (const post of seriesPosts.value) {
+  for (const post of allPosts.value) {
     for (const tag of post.tags ?? []) {
       map.set(tag.name, (map.get(tag.name) ?? 0) + 1)
     }
@@ -198,12 +154,9 @@ watch([allTags, activeTags], measureTagRows, { flush: 'post' })
 const filteredPosts = computed(() => {
   // 搜索结果不带 tags，按 id 从全量列表补齐，保证标签筛选对搜索结果同样生效
   const tagsById = new Map(allPosts.value.map(p => [p.id, p.tags ?? []]))
-  const scope = seriesScope.value
   const source = searchResults.value
-    ? searchResults.value
-      .filter(post => !scope || scope.has(post.id))
-      .map(post => ({ ...post, tags: post.tags?.length ? post.tags : tagsById.get(post.id) ?? [] }))
-    : seriesPosts.value
+    ? searchResults.value.map(post => ({ ...post, tags: post.tags?.length ? post.tags : tagsById.get(post.id) ?? [] }))
+    : allPosts.value
   // 多选按「任一命中」取并集；一个都没选时不过滤，等同于全部
   if (activeTags.value.length === 0) return source
   return source.filter(p =>
@@ -218,30 +171,144 @@ function openArticleCatalog(slug: string, groupKey: string) {
   if (group) openCatalog.value = { group, currentSlug: slug }
 }
 
-type ArchiveCard = { group: ArticleGroup; key: string }
-  | { post: ArchivePost; key: string; positions: ArticlePosition[] }
-const archiveCards = computed(() => {
-  const cards: ArchiveCard[] = []
-  const groups = articleGroups.value
-  const seen = new Set<string>()
-  for (const post of filteredPosts.value) {
-    const positions = groups.positions.get(post.slug) ?? []
-    let stacked = false
-    for (const position of positions) {
-      if (position.kind !== grouping.value) continue
-      const series = position.kind === 'series' ? position.title : position.parentSeries
-      if (selectedSeries.value.size && (!series || !selectedSeries.value.has(series))) continue
-      const group = groups.byKey.get(position.groupKey)
-      if (!group || group.count < 2) continue
-      stacked = true
-      if (seen.has(group.key)) continue
-      cards.push({ group, key: group.key })
-      seen.add(group.key)
-    }
-    if (!stacked) cards.push({ post, key: post.slug, positions })
-  }
-  return cards
+// 归档按系列分组（卡片和列表共用）：一篇文章只归入它所属的第一个系列，
+// 没有系列的统一落到「独立文章」组；组内按篇目序号，组间按最近更新排，兜底组固定最后。
+const UNSECTIONED_KEY = 'unsectioned'
+
+interface ArchiveRow {
+  post: ArchivePost
+  position?: ArticlePosition
+  topic?: ArticlePosition
+}
+
+interface ArchiveSection {
+  key: string
+  title: string
+  group?: ArticleGroup
+  rows: ArchiveRow[]
+  latest: number
+  // 整组都没有专题/序号时就不渲染对应列，避免留出整列空白
+  hasTopic: boolean
+  hasPosition: boolean
+}
+
+// 系列之间的顺序可以手动拖拽调整，顺序记在 cookie 里（独立文章组不参与，固定最后）
+const sectionOrder = useCookie<string[]>('blog-section-order', {
+  maxAge: 60 * 60 * 24 * 365,
+  sameSite: 'lax',
 })
+const orderIndex = computed(() => {
+  const index = new Map<string, number>()
+  for (const [position, key] of (sectionOrder.value ?? []).entries()) index.set(key, position)
+  return index
+})
+
+const draggingSection = ref<string | null>(null)
+const dragOverSection = ref<string | null>(null)
+
+function startSectionDrag(event: DragEvent, key: string) {
+  draggingSection.value = key
+  if (event.dataTransfer) {
+    event.dataTransfer.effectAllowed = 'move'
+    event.dataTransfer.setData('text/plain', key)
+  }
+}
+
+function dragSectionOver(event: DragEvent, key: string) {
+  if (!draggingSection.value || draggingSection.value === key) return
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+  dragOverSection.value = key
+}
+
+function dropSection(key: string) {
+  const from = draggingSection.value
+  draggingSection.value = null
+  dragOverSection.value = null
+  if (!from || from === key) return
+
+  // 只在系列之间重排，独立文章组不参与
+  const keys = sections.value.map(section => section.key).filter(k => k !== UNSECTIONED_KEY)
+  const fromIndex = keys.indexOf(from)
+  const toIndex = keys.indexOf(key)
+  if (fromIndex < 0 || toIndex < 0) return
+  keys.splice(toIndex, 0, keys.splice(fromIndex, 1)[0])
+  sectionOrder.value = keys
+}
+
+function endSectionDrag() {
+  draggingSection.value = null
+  dragOverSection.value = null
+}
+
+const sections = computed<ArchiveSection[]>(() => {
+  const map = new Map<string, ArchiveSection>()
+  for (const post of filteredPosts.value) {
+    const positions = articleGroups.value.positions.get(post.slug) ?? []
+    const series = positions.find(position => position.kind === 'series')
+    const key = series?.groupKey ?? UNSECTIONED_KEY
+    let section = map.get(key)
+    if (!section) {
+      section = {
+        key,
+        title: series?.title ?? '独立文章',
+        group: series ? articleGroups.value.byKey.get(series.groupKey) : undefined,
+        rows: [],
+        latest: 0,
+        hasTopic: false,
+        hasPosition: false,
+      }
+      map.set(key, section)
+    }
+    section.rows.push({
+      post,
+      position: series,
+      topic: positions.find(position => position.kind === 'topic'),
+    })
+    section.latest = Math.max(section.latest, Date.parse(post.createdAt) || 0)
+  }
+
+  // 组内按篇目序号升序，读起来和目录一致；没有序号的（独立文章）保持时间倒序
+  for (const section of map.values()) {
+    section.rows.sort((a, b) => (a.position?.index ?? 0) - (b.position?.index ?? 0))
+    section.hasTopic = section.rows.some(row => Boolean(row.topic))
+    section.hasPosition = section.rows.some(row => Boolean(row.position))
+  }
+
+  const order = orderIndex.value
+  return [...map.values()].sort((a, b) => {
+    if (a.key === UNSECTIONED_KEY) return 1
+    if (b.key === UNSECTIONED_KEY) return -1
+    // 拖拽过的系列按记录的顺序排，没记录的按最近更新排在后面
+    const ai = order.get(a.key)
+    const bi = order.get(b.key)
+    if (ai !== undefined && bi !== undefined) return ai - bi
+    if (ai !== undefined) return -1
+    if (bi !== undefined) return 1
+    return b.latest - a.latest
+  })
+})
+
+// 折叠状态按分组 key 记录，默认全部展开
+const collapsedSections = ref<Set<string>>(new Set())
+
+function toggleSection(key: string) {
+  const next = new Set(collapsedSections.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  collapsedSections.value = next
+}
+
+const allCollapsed = computed(() =>
+  sections.value.length > 0
+  && sections.value.every(section => collapsedSections.value.has(section.key)),
+)
+
+function toggleAllSections() {
+  collapsedSections.value = allCollapsed.value
+    ? new Set()
+    : new Set(sections.value.map(section => section.key))
+}
 
 function toggleTag(name: string) {
   activeTags.value = activeTags.value.includes(name)
@@ -257,7 +324,7 @@ const statusText = computed(() => {
   if (searching.value) return '搜索中…'
   if (searchQuery.value.trim()) return `${filteredPosts.value.length} 篇匹配`
   if (activeTags.value.length) return `${filteredPosts.value.length} 篇`
-  return `${seriesPosts.value.length} 篇文章`
+  return `${allPosts.value.length} 篇文章`
 })
 
 function formatDate(date: string) {
@@ -306,45 +373,37 @@ function formatDate(date: string) {
               class="min-h-10 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-[var(--reader-ink)] placeholder:text-[var(--reader-muted)]"
             />
           </label>
-          <details
-            v-if="seriesOptions.length"
-            ref="seriesFilter"
-            class="series-filter relative w-full min-w-0 text-sm text-[var(--reader-ink)] sm:w-60"
-            @keydown.esc.stop="dismissSeriesFilter"
+          <button
+            v-if="sections.length > 1"
+            type="button"
+            class="ml-auto flex min-h-[2.625rem] shrink-0 items-center rounded-md border border-[var(--reader-line)] px-3 text-sm text-[var(--reader-muted)] transition-colors hover:text-[var(--reader-ink)]"
+            :title="allCollapsed ? '展开所有分组' : '折叠所有分组后可拖动调整系列顺序'"
+            @click="toggleAllSections"
           >
-            <summary class="flex min-h-[2.625rem] cursor-pointer list-none items-center justify-between gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3">
-              <span class="sr-only">按系列筛选</span>
-              <span class="truncate">{{ activeSeries.length === 1 ? activeSeries[0] : activeSeries.length ? `已选 ${activeSeries.length} 个系列` : '全部系列' }}</span>
-              <svg aria-hidden="true" class="series-chevron h-3.5 w-3.5 shrink-0 text-[var(--reader-muted)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="m4 6 4 4 4-4" />
+            {{ allCollapsed ? '全部展开' : '全部折叠' }}
+          </button>
+          <fieldset class="flex shrink-0 self-start gap-0.5 rounded-md border border-[var(--reader-line)] p-0.5">
+            <legend class="sr-only">显示方式</legend>
+            <button
+              v-for="option in viewOptions"
+              :key="option.value"
+              type="button"
+              class="view-toggle grid size-9 place-items-center rounded transition-colors"
+              :aria-pressed="view === option.value"
+              :title="option.label"
+              @click="view = option.value"
+            >
+              <svg v-if="option.value === 'card'" aria-hidden="true" class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="6" height="6" rx="1" />
+                <rect x="11" y="3" width="6" height="6" rx="1" />
+                <rect x="3" y="11" width="6" height="6" rx="1" />
+                <rect x="11" y="11" width="6" height="6" rx="1" />
               </svg>
-            </summary>
-            <fieldset class="absolute inset-x-0 top-full z-20 mt-1 max-h-64 min-w-0 overflow-y-auto rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] p-1.5 shadow-lg">
-              <legend class="sr-only">按系列筛选（可多选）</legend>
-              <button
-                v-if="activeSeries.length"
-                type="button"
-                class="mb-1 rounded px-2 py-1 text-xs text-[var(--reader-muted)] hover:text-[var(--reader-ink)]"
-                @click="activeSeries = []; dismissSeriesFilter()"
-              >
-                清除系列筛选
-              </button>
-              <label
-                v-for="series in seriesOptions"
-                :key="series"
-                class="flex min-h-9 cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-[var(--reader-paper)]"
-              >
-                <input v-model="activeSeries" :value="series" type="checkbox" class="size-4 shrink-0 accent-[var(--reader-accent)]" />
-                <span class="min-w-0 flex-1 break-words">{{ series }}</span>
-              </label>
-            </fieldset>
-          </details>
-          <fieldset class="flex min-w-0 flex-wrap gap-0.5 self-start rounded-md border border-[var(--reader-line)] p-0.5 sm:shrink-0">
-            <legend class="sr-only">卡片分组方式</legend>
-            <label v-for="option in groupingOptions" :key="option.value" class="grouping-option cursor-pointer">
-              <input v-model="grouping" type="radio" name="archive-grouping" :value="option.value" class="sr-only" />
-              <span class="flex min-h-9 items-center rounded px-2.5 text-sm sm:px-3">{{ option.label }}</span>
-            </label>
+              <svg v-else aria-hidden="true" class="h-4 w-4" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+                <path d="M3 5.5h2M8 5.5h9M3 10h2M8 10h9M3 14.5h2M8 14.5h9" />
+              </svg>
+              <span class="sr-only">{{ option.label }}</span>
+            </button>
           </fieldset>
         </div>
       </div>
@@ -366,7 +425,7 @@ function formatDate(date: string) {
             :aria-pressed="activeTags.length === 0"
             @click="activeTags = []"
           >
-            全部<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ seriesPosts.length }}</span>
+            全部<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ allPosts.length }}</span>
           </button>
           <button
             v-for="(tag, index) in allTags"
@@ -396,90 +455,158 @@ function formatDate(date: string) {
         </div>
       </div>
 
-      <ul v-if="archiveCards.length" class="archive-cards mt-5 grid gap-4 sm:gap-5">
-        <template v-for="card in archiveCards" :key="card.key">
-          <li v-if="'group' in card" :data-kind="card.group.kind" class="archive-stack relative isolate grid min-w-0">
+      <div v-if="sections.length" class="mt-5 space-y-7">
+        <section
+          v-for="section in sections"
+          :key="section.key"
+          class="archive-section"
+          :class="[
+            draggingSection === section.key && 'is-dragging',
+            dragOverSection === section.key && 'is-drop-target',
+          ]"
+          @dragover="dragSectionOver($event, section.key)"
+          @drop.prevent="dropSection(section.key)"
+        >
+          <header class="archive-section-head flex items-start gap-3 pb-3">
             <button
               type="button"
-              aria-haspopup="dialog"
-              class="archive-stack-front flex min-h-48 min-w-0 flex-col rounded-xl border p-5 text-left transition-colors"
-              @click="openCatalog = { group: card.group }"
+              class="group/head flex min-w-0 max-w-full items-start gap-2 text-left"
+              :class="collapsedSections.has(section.key) ? 'flex-none' : 'flex-1'"
+              :aria-expanded="!collapsedSections.has(section.key)"
+              :aria-controls="`section-${section.key}`"
+              @click="toggleSection(section.key)"
             >
-              <span class="text-xs tabular-nums text-[var(--reader-muted)]">
-                {{ card.group.kind === 'topic' ? '专题' : '系列' }}
-                · {{ card.group.count }} 篇<template v-if="card.group.topicCount"> · {{ card.group.topicCount }} 个专题</template>
-              </span>
-              <span class="reader-display mt-3 line-clamp-3 text-xl font-bold leading-snug">{{ card.group.title }}</span>
-              <span v-if="card.group.description" class="reader-display mt-2 line-clamp-2 text-sm leading-relaxed text-[var(--reader-muted)]">{{ card.group.description }}</span>
-              <span class="mt-auto space-y-2.5 pt-3">
-                <span v-if="card.group.parentSeries" class="card-placement flex items-baseline gap-2">
-                  <span class="card-placement-label">所属系列</span>
-                  <span class="min-w-0 flex-1 break-words font-medium">{{ card.group.parentSeries }}</span>
-                  <span v-if="card.group.topicPosition" class="shrink-0 tabular-nums">{{ card.group.topicPosition.index }}/{{ card.group.topicPosition.total }}</span>
-                </span>
-                <span class="flex items-center justify-between gap-2 border-t border-[var(--reader-line)] pt-2 text-sm text-[var(--reader-muted)]">
-                  {{ card.group.kind === 'topic' ? '查看专题目录' : '查看系列目录' }} <span aria-hidden="true">→</span>
+              <svg
+                aria-hidden="true"
+                class="archive-section-chevron mt-1 h-3.5 w-3.5 shrink-0 text-[var(--reader-muted)]"
+                :class="collapsedSections.has(section.key) && 'is-collapsed'"
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.5"
+              >
+                <path d="m4 6 4 4 4-4" />
+              </svg>
+              <span class="min-w-0 flex-1">
+                <span class="reader-display block text-base font-bold leading-snug transition-colors group-hover/head:text-[var(--reader-accent)]">{{ section.title }}</span>
+                <span class="mt-1 block text-[11px] tracking-[0.12em] text-[var(--reader-muted)]">
+                  {{ section.group ? '系列' : '未归入系列' }} · <span class="tabular-nums">{{ section.rows.length }} 篇</span>
                 </span>
               </span>
             </button>
-          </li>
-          <li
-            v-else
-            class="group relative flex min-h-48 min-w-0 flex-col rounded-xl border border-[var(--reader-line)] bg-[var(--reader-surface)] p-5 transition-colors focus-within:border-[var(--reader-accent)] hover:border-[var(--reader-accent)]"
-          >
-            <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--reader-muted)]">
-              <time :datetime="card.post.createdAt">{{ formatDate(card.post.createdAt) }}</time>
-              <span class="ml-auto">{{ card.post.readingTime ?? 1 }} 分钟阅读</span>
-              <span aria-hidden="true" class="text-base leading-none text-[var(--reader-accent)]">↗</span>
-            </div>
-            <h2 class="reader-display mt-3 text-xl font-bold leading-snug">
-              <NuxtLink
-                :to="`/blog/${card.post.slug}`"
-                class="transition-colors group-hover:text-[var(--reader-accent)] after:absolute after:inset-0 after:rounded-xl after:content-['']"
+            <button
+              v-if="section.key !== UNSECTIONED_KEY && collapsedSections.has(section.key)"
+              type="button"
+              draggable="true"
+              class="section-drag hidden shrink-0 cursor-grab self-center rounded p-1.5 text-[var(--reader-muted)] transition-colors hover:text-[var(--reader-ink)] active:cursor-grabbing lg:block"
+              aria-label="拖动调整系列顺序"
+              title="拖动调整系列顺序"
+              @click.stop
+              @dragstart="startSectionDrag($event, section.key)"
+              @dragend="endSectionDrag"
+            >
+              <svg class="h-4 w-4" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                <circle cx="6" cy="4" r="1.4" />
+                <circle cx="10" cy="4" r="1.4" />
+                <circle cx="6" cy="8" r="1.4" />
+                <circle cx="10" cy="8" r="1.4" />
+                <circle cx="6" cy="12" r="1.4" />
+                <circle cx="10" cy="12" r="1.4" />
+              </svg>
+            </button>
+          </header>
+
+          <div v-show="!collapsedSections.has(section.key)" :id="`section-${section.key}`">
+            <ul v-if="view === 'card'" class="archive-cards grid gap-4 sm:gap-5">
+              <li
+                v-for="row in section.rows"
+                :key="row.post.id"
+                class="group relative flex min-h-48 min-w-0 flex-col rounded-xl border border-[var(--reader-line)] bg-[var(--reader-surface)] p-5 transition-colors focus-within:border-[var(--reader-accent)] hover:border-[var(--reader-accent)]"
               >
-                <span class="line-clamp-3">{{ card.post.title }}</span>
-              </NuxtLink>
-            </h2>
-            <p v-if="card.post.excerpt" class="reader-display mt-2 line-clamp-3 text-sm leading-relaxed text-[var(--reader-muted)]">
-              {{ card.post.excerpt }}
-            </p>
-            <div v-if="card.positions.length || card.post.tags?.length" class="mt-auto space-y-2.5 pt-4">
-              <div v-if="card.post.tags?.length" role="group" aria-label="文章标签" class="tag-text flex flex-wrap gap-1.5 text-xs">
-                <button
-                  v-for="tag in card.post.tags"
-                  :key="tag.id"
-                  type="button"
-                  class="relative z-10 max-w-full truncate rounded border bg-[var(--reader-paper)] px-2 py-0.5 transition-colors hover:border-[var(--reader-accent)] hover:text-[var(--reader-accent)]"
-                  :class="activeTags.includes(tag.name)
-                    ? 'border-[var(--reader-accent)] text-[var(--reader-accent)]'
-                    : 'border-[var(--reader-line)] text-[var(--reader-muted)]'"
-                  :aria-pressed="activeTags.includes(tag.name)"
-                  @click="toggleTag(tag.name)"
-                >
-                  #{{ tag.name }}
-                </button>
-              </div>
-              <div v-if="card.positions.length" role="group" aria-label="文章归属" class="card-placement">
-                <button
-                  v-for="position in card.positions"
-                  :key="position.groupKey"
-                  type="button"
-                  aria-haspopup="dialog"
-                  class="relative z-10 flex min-h-6 w-full items-baseline gap-2 rounded-sm py-0.5 text-left hover:text-[var(--reader-ink)]"
-                  @click="openArticleCatalog(card.post.slug, position.groupKey)"
-                >
-                  <span class="card-placement-label">{{ position.kind === 'series' ? '所属系列' : '所属专题' }}</span>
-                  <span class="min-w-0 flex-1 break-words">
-                    <span class="font-medium underline decoration-[var(--reader-line)] underline-offset-2">{{ position.title }}</span>
-                    <span v-if="position.parentSeries && card.positions.length > 2" class="block opacity-75">{{ position.parentSeries }}</span>
+                <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs tabular-nums text-[var(--reader-muted)]">
+                  <time :datetime="row.post.createdAt">{{ formatDate(row.post.createdAt) }}</time>
+                  <span class="ml-auto">{{ row.post.readingTime ?? 1 }} 分钟阅读</span>
+                  <span aria-hidden="true" class="text-base leading-none text-[var(--reader-accent)]">↗</span>
+                </div>
+                <h2 class="reader-display mt-3 text-xl font-bold leading-snug">
+                  <NuxtLink
+                    :to="`/blog/${row.post.slug}`"
+                    class="transition-colors group-hover:text-[var(--reader-accent)] after:absolute after:inset-0 after:rounded-xl after:content-['']"
+                  >
+                    <span class="line-clamp-3">{{ row.post.title }}</span>
+                  </NuxtLink>
+                </h2>
+                <div v-if="row.topic || row.post.tags?.length" class="mt-auto pt-4">
+                  <div v-if="row.topic" role="group" aria-label="文章归属" class="card-placement">
+                    <button
+                      type="button"
+                      aria-haspopup="dialog"
+                      class="relative z-10 flex min-h-6 w-full items-baseline gap-1.5 rounded-sm py-0.5 text-left hover:text-[var(--reader-ink)]"
+                      @click="openArticleCatalog(row.post.slug, row.topic.groupKey)"
+                    >
+                      <span class="card-placement-label">专题</span>
+                      <span class="min-w-0 flex-1 truncate font-medium" :title="row.topic.title">{{ row.topic.title }}</span>
+                      <span class="shrink-0 tabular-nums">{{ row.topic.index }}/{{ row.topic.total }}</span>
+                    </button>
+                  </div>
+                  <div v-if="row.post.tags?.length" role="group" aria-label="文章标签" class="tag-text mt-1.5 flex flex-wrap items-center gap-x-2.5 text-[11px] leading-5 text-[var(--reader-muted)]">
+                    <button
+                      v-for="tag in row.post.tags"
+                      :key="tag.id"
+                      type="button"
+                      class="relative z-10 max-w-full truncate transition-colors hover:text-[var(--reader-accent)]"
+                      :class="activeTags.includes(tag.name) && 'font-medium text-[var(--reader-accent)]'"
+                      :aria-pressed="activeTags.includes(tag.name)"
+                      @click="toggleTag(tag.name)"
+                    >
+                      #{{ tag.name }}
+                    </button>
+                  </div>
+                </div>
+              </li>
+            </ul>
+
+            <ul v-else class="archive-list">
+              <li
+                v-for="row in section.rows"
+                :key="row.post.id"
+                class="archive-row group relative flex items-baseline gap-3 border-b border-[var(--reader-line)] py-3 sm:gap-4"
+              >
+                <time class="hidden w-[5.5rem] shrink-0 text-xs tabular-nums text-[var(--reader-muted)] sm:block" :datetime="row.post.createdAt">
+                  {{ formatDate(row.post.createdAt) }}
+                </time>
+                <span class="min-w-0 flex-1">
+                  <NuxtLink
+                    :to="`/blog/${row.post.slug}`"
+                    class="reader-display block text-[15px] font-semibold leading-snug transition-colors after:absolute after:inset-0 after:content-[''] group-hover:text-[var(--reader-accent)]"
+                  >
+                    {{ row.post.title }}
+                  </NuxtLink>
+                  <span class="mt-1 flex flex-wrap items-center gap-x-3 text-xs tabular-nums text-[var(--reader-muted)] sm:hidden">
+                    <time :datetime="row.post.createdAt">{{ formatDate(row.post.createdAt) }}</time>
+                    <span>{{ row.post.readingTime ?? 1 }} 分钟</span>
                   </span>
-                  <span class="shrink-0 tabular-nums">{{ position.index }}/{{ position.total }}</span>
-                </button>
-              </div>
-            </div>
-          </li>
-        </template>
-      </ul>
+                </span>
+                <template v-if="section.hasTopic">
+                  <span v-if="row.topic" class="hidden w-60 shrink-0 truncate text-xs text-[var(--reader-muted)] lg:block" :title="row.topic.title">
+                    {{ row.topic.title }}
+                  </span>
+                  <span v-else class="hidden w-60 shrink-0 lg:block" aria-hidden="true"></span>
+                </template>
+                <template v-if="section.hasPosition">
+                  <span v-if="row.position" class="hidden w-12 shrink-0 text-right text-xs tabular-nums text-[var(--reader-muted)] lg:block">
+                    {{ row.position.index }}/{{ row.position.total }}
+                  </span>
+                  <span v-else class="hidden w-12 shrink-0 lg:block" aria-hidden="true"></span>
+                </template>
+                <span class="hidden w-[4.5rem] shrink-0 text-right text-xs tabular-nums text-[var(--reader-muted)] sm:block">
+                  {{ row.post.readingTime ?? 1 }} 分钟
+                </span>
+              </li>
+            </ul>
+          </div>
+        </section>
+      </div>
 
       <p v-else class="border-b border-[var(--reader-line)] py-16 text-center text-sm text-[var(--reader-muted)]">
         {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : activeTags.length ? '所选标签下暂无文章' : '暂无文章' }}
@@ -500,48 +627,36 @@ function formatDate(date: string) {
 }
 
 .archive-cards {
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 18rem), 1fr));
+  /* 19rem 让 1440 宽排 4 列、1920 宽排 5 列；再宽也不至于碎成 7 列以上 */
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 19rem), 1fr));
   grid-auto-rows: 1fr;
 }
 
-.archive-stack {
-  --stack-face: color-mix(in srgb, var(--reader-surface) 95%, var(--reader-ink));
-  --stack-line: color-mix(in srgb, var(--reader-line) 94%, var(--reader-ink));
+.archive-list {
+  border-top: 1px solid var(--reader-line);
 }
 
-.archive-stack[data-kind="series"] {
-  --stack-face: color-mix(in srgb, var(--reader-surface) 94%, var(--reader-accent));
-  --stack-line: color-mix(in srgb, var(--reader-line) 90%, var(--reader-accent));
+/* 折叠箭头：展开朝下，收起朝右 */
+.archive-section-chevron {
+  transition: transform 0.16s ease;
 }
 
-.archive-stack[data-kind="series"]::before,
-.archive-stack::after {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  border: 1px solid var(--stack-line);
-  border-radius: 0.75rem;
-  pointer-events: none;
-  content: '';
+.archive-section-chevron.is-collapsed {
+  transform: rotate(-90deg);
 }
 
-.archive-stack[data-kind="series"]::before {
-  transform: translate(7px, 10px);
-  background: color-mix(in srgb, var(--stack-face) 91%, var(--reader-ink));
+/* 拖拽排序：拖动中的组半透明，目标位置顶部画一条强调色线 */
+.archive-section.is-dragging {
+  opacity: 0.45;
 }
 
-.archive-stack::after {
-  transform: translate(3.5px, 5px);
-  background: color-mix(in srgb, var(--stack-face) 96%, var(--reader-ink));
+.archive-section.is-drop-target {
+  box-shadow: 0 -2px 0 var(--reader-accent);
 }
 
-.archive-stack-front {
-  border-color: var(--stack-line);
-  background: var(--stack-face);
-}
-
-.archive-stack-front:is(:hover, :focus-visible) {
-  border-color: var(--reader-muted);
+.section-drag:focus-visible {
+  outline: 2px solid var(--reader-accent);
+  outline-offset: 2px;
 }
 
 .card-placement {
@@ -554,21 +669,21 @@ function formatDate(date: string) {
   flex-shrink: 0;
 }
 
-.grouping-option span {
+.view-toggle {
   color: var(--reader-muted);
 }
 
-.grouping-option:hover span,
-.grouping-option input:checked + span {
+.view-toggle:hover {
+  background: var(--reader-paper);
   color: var(--reader-ink);
 }
 
-.grouping-option input:checked + span {
+.view-toggle[aria-pressed='true'] {
   background: var(--reader-surface);
-  font-weight: 600;
+  color: var(--reader-ink);
 }
 
-.grouping-option input:focus-visible + span {
+.view-toggle:focus-visible {
   outline: 2px solid var(--reader-accent);
   outline-offset: 2px;
 }

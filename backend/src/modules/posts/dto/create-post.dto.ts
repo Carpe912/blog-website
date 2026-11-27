@@ -1,14 +1,31 @@
+import { Type } from 'class-transformer';
 import {
+  IsArray,
+  IsObject,
   IsString,
   IsNotEmpty,
   IsOptional,
   IsBoolean,
   Matches,
   MaxLength,
+  ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { CATALOG_NAME_MAX_LENGTH } from '../article-catalog';
 
-export class CreatePostDto {
+export class PostMembershipDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(CATALOG_NAME_MAX_LENGTH)
+  series?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(CATALOG_NAME_MAX_LENGTH)
+  topic?: string | null;
+}
+
+export class CreatePostDto extends PostMembershipDto {
   @IsString()
   @IsNotEmpty()
   @MaxLength(200)
@@ -35,15 +52,12 @@ export class CreatePostDto {
   @MaxLength(500)
   excerpt?: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(CATALOG_NAME_MAX_LENGTH)
-  series?: string | null;
-
-  @IsOptional()
-  @IsString()
-  @MaxLength(CATALOG_NAME_MAX_LENGTH)
-  topic?: string | null;
+  @ValidateIf((_, value) => value !== undefined)
+  @IsArray()
+  @IsObject({ each: true })
+  @ValidateNested({ each: true })
+  @Type(() => PostMembershipDto)
+  memberships?: PostMembershipDto[];
 
   @IsOptional()
   @IsBoolean()

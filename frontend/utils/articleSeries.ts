@@ -1,6 +1,7 @@
 import {
   AI_ENGINEERING, FRONTEND, HARNESS, JAVASCRIPT, MCP, ONTOLOGY,
-  frontendTopicOrder, inferLegacyCatalog, readCatalogHeader, type CatalogPosition as Position,
+  frontendTopicOrder, inferLegacyCatalog, normalizeMemberships, readCatalogHeader,
+  type ArticleCatalog, type CatalogPosition as Position,
 } from '../../backend/src/modules/posts/article-catalog'
 
 export interface ArchivePost {
@@ -11,6 +12,7 @@ export interface ArchivePost {
   content?: string
   series?: string | null
   topic?: string | null
+  memberships?: ArticleCatalog[]
   excerpt?: string | null
   readingTime?: number | null
   tags?: { id: number; name: string }[]
@@ -19,6 +21,7 @@ export interface ArchivePost {
 interface Chapter {
   post: ArchivePost
   topic: string
+  firstInSeries: boolean
   topicOrder?: number
   number?: number
   total?: number
@@ -29,6 +32,8 @@ interface Chapter {
 export interface ArticlePosition extends Position {
   kind: 'topic' | 'series'
   title: string
+  groupKey: string
+  parentSeries?: string
 }
 
 export interface ArticleGroup {
@@ -52,38 +57,71 @@ const descriptions = new Map([
   [HARNESS, '理解 Agent 运行时、插件体系和状态管理。'],
 ])
 
-function getPlacement(post: ArchivePost) {
-  const { series: headerSeries, topic: headerTopic, ...chapterMetadata } = readCatalogHeader(post.content ?? '')
-  const legacy = inferLegacyCatalog(post.slug, { series: headerSeries, topic: headerTopic, ...chapterMetadata })
-  // API 响应中显式的 null 表示无归属；旧版接口缺少字段时沿用历史目录识别。
-  const series = post.series === undefined && post.topic === undefined ? legacy.series : post.series ?? null
-  const topic = post.series === undefined && post.topic === undefined ? legacy.topic : post.topic ?? null
-  if (!series && !topic) return
+function seriesKey(title: string) {
+  return `series:${title}`
+}
 
-  // 归属曾被显式改动时，正文里的旧篇号不用于新目录。
-  const headerMatches = (!legacy.series || legacy.series === series) && (!legacy.topic || legacy.topic === topic)
-  const chapter: Chapter = {
-    post,
-    topic: topic ?? '',
-    topicOrder: series === FRONTEND ? frontendTopicOrder(topic ?? '') : undefined,
-    ...(headerMatches ? chapterMetadata : {}),
-  }
-  return { title: series, chapter }
+function topicKey(series: string | null, topic: string) {
+  return `topic:${JSON.stringify([series, topic])}`
 }
 
 export function indexArticleGroups(posts: ArchivePost[]) {
   const groups = new Map<string | null, Chapter[]>()
+  const groupKeysBySlug = new Map<string, Set<string>>()
   for (const post of posts) {
-    const placement = getPlacement(post)
-    if (!placement) continue
-    const { title, chapter } = placement
-    if (!groups.has(title)) groups.set(title, [])
-    groups.get(title)!.push(chapter)
+    const header = readCatalogHeader(post.content ?? '')
+    const legacy = inferLegacyCatalog(post.slug, header)
+    // 只有缺少归属字段的旧版响应才从正文推断归属。
+    const memberships = post.memberships ?? normalizeMemberships([
+      post.series === undefined && post.topic === undefined ? legacy : post,
+    ])
+    const keys = new Set<string>()
+    groupKeysBySlug.set(post.slug, keys)
+    for (const { series, topic } of memberships) {
+      const key = series ? seriesKey(series) : null
+      const firstInSeries = key !== null && !keys.has(key)
+      if (key) keys.add(key)
+      if (topic) keys.add(topicKey(series, topic))
+
+      const matchesSeries = Boolean(series && legacy.series === series)
+      const matchesTopic = Boolean(topic && legacy.topic === topic && legacy.series === series)
+      const chapter: Chapter = {
+        post,
+        topic: topic ?? '',
+        firstInSeries,
+        topicOrder: series === FRONTEND ? frontendTopicOrder(topic ?? '') : undefined,
+        number: matchesSeries || matchesTopic ? header.number : undefined,
+        total: matchesSeries || matchesTopic ? header.total : undefined,
+        seriesPosition: matchesSeries ? header.seriesPosition : undefined,
+        topicPosition: matchesTopic ? header.topicPosition : undefined,
+      }
+      if (!groups.has(series)) groups.set(series, [])
+      groups.get(series)!.push(chapter)
+    }
   }
 
-  const bySeries = new Map<string, ArticleGroup>()
-  const byTopic = new Map<string, ArticleGroup>()
-  const positions = new Map<string, ArticlePosition[]>()
+  const byKey = new Map<string, ArticleGroup>()
+  const positionsBySlug = new Map<string, Map<string, ArticlePosition>>()
+  function register(group: ArticleGroup) {
+    byKey.set(group.key, group)
+    let index = 0
+    for (const section of group.sections) {
+      for (const chapter of section.chapters) {
+        index += 1
+        const slug = chapter.post.slug
+        const position = group.kind === 'series' ? chapter.seriesPosition : chapter.topicPosition
+        if (!positionsBySlug.has(slug)) positionsBySlug.set(slug, new Map())
+        positionsBySlug.get(slug)!.set(group.key, {
+          kind: group.kind,
+          title: group.title,
+          groupKey: group.key,
+          parentSeries: group.parentSeries,
+          ...(position ?? { index, total: group.count }),
+        })
+      }
+    }
+  }
+
   for (const [title, chapters] of groups) {
     chapters.sort((a, b) =>
       (a.topicOrder ?? 0) - (b.topicOrder ?? 0)
@@ -101,54 +139,37 @@ export function indexArticleGroups(posts: ArchivePost[]) {
     }
     const sections = Array.from(chaptersByTopic, ([topic, chapters]) => ({ topic, chapters }))
     const namedTopics = sections.filter(section => section.topic)
-    const series: ArticleGroup | null = title ? {
-      kind: 'series',
-      key: `series:${title}`,
-      title,
-      description: descriptions.get(title),
-      count: chapters.length,
-      topicCount: namedTopics.length,
-      sections,
-    } : null
-
-    // 序号跟随完整目录的顺序，搜索或标签筛选只改变可见卡片。
-    let seriesIndex = 0
-    for (const section of sections) {
-      for (const [index, chapter] of section.chapters.entries()) {
-        const { post } = chapter
-        seriesIndex += 1
-        const articlePositions: ArticlePosition[] = []
-        if (title) {
-          articlePositions.push({
-            kind: 'series',
-            title,
-            ...(chapter.seriesPosition ?? { index: seriesIndex, total: chapters.length }),
-          })
-        }
-        if (section.topic) {
-          articlePositions.push({
-            kind: 'topic',
-            title: section.topic,
-            ...(chapter.topicPosition ?? { index: index + 1, total: section.chapters.length }),
-          })
-        }
-        positions.set(post.slug, articlePositions)
-        if (series) bySeries.set(post.slug, series)
-      }
+    if (title) {
+      // 一篇文章可出现在多个专题目录，在同一系列目录里只显示一次。
+      const seriesSections = sections
+        .map(section => ({ ...section, chapters: section.chapters.filter(chapter => chapter.firstInSeries) }))
+        .filter(section => section.chapters.length)
+      register({
+        kind: 'series',
+        key: seriesKey(title),
+        title,
+        description: descriptions.get(title),
+        count: seriesSections.reduce((sum, section) => sum + section.chapters.length, 0),
+        topicCount: namedTopics.length,
+        sections: seriesSections,
+      })
     }
 
     for (const [index, section] of namedTopics.entries()) {
-      const topic: ArticleGroup = {
+      register({
         kind: 'topic',
-        key: `topic:${JSON.stringify([title, section.topic])}`,
+        key: topicKey(title, section.topic),
         title: section.topic,
         parentSeries: title ?? undefined,
         count: section.chapters.length,
         topicPosition: title ? { index: index + 1, total: namedTopics.length } : undefined,
         sections: [{ topic: '', chapters: section.chapters }],
-      }
-      for (const { post } of section.chapters) byTopic.set(post.slug, topic)
+      })
     }
   }
-  return { series: bySeries, topic: byTopic, positions }
+  const positions = new Map<string, ArticlePosition[]>()
+  for (const [slug, byGroup] of positionsBySlug) {
+    positions.set(slug, Array.from(groupKeysBySlug.get(slug)!, key => byGroup.get(key)!))
+  }
+  return { byKey, positions }
 }

@@ -28,6 +28,7 @@ model Post {
   cover       String?
   series      String?   @db.VarChar(160)
   topic       String?   @db.VarChar(160)
+  memberships Json      @default("[]")
   aiKeywords  String[]  @default([])
   published   Boolean   @default(false)
   publishedAt DateTime?

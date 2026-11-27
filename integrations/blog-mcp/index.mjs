@@ -117,6 +117,21 @@ function htmlToText(html = "") {
     .trim();
 }
 
+function getMemberships(post) {
+  return post.memberships ?? (post.series || post.topic ? [{ series: post.series ?? null, topic: post.topic ?? null }] : []);
+}
+
+function membershipLines(post) {
+  const memberships = getMemberships(post);
+  return memberships.flatMap(({ series, topic }, index) => {
+    const lines = [
+      ...(series ? [`所属系列：${series}`] : []),
+      ...(topic ? [`所属主题：${topic}`] : []),
+    ];
+    return memberships.length > 1 ? [`归属 ${index + 1} · ${lines.join(" · ")}`] : lines;
+  });
+}
+
 // 列表只回必要字段，避免把几千字正文塞给模型
 function toSummary(post) {
   return {
@@ -126,12 +141,25 @@ function toSummary(post) {
     excerpt: post.excerpt || "",
     series: post.series ?? null,
     topic: post.topic ?? null,
+    memberships: getMemberships(post),
     tags: (post.tags || []).map((t) => t.name),
     createdAt: post.publishedAt || post.createdAt || null,
     readingTime: post.readingTime ?? null,
     url: `https://47.116.6.132/blog/${post.slug || post.id}`,
   };
 }
+
+const membershipArray = {
+  type: "array",
+  items: {
+    type: "object",
+    properties: {
+      series: { type: ["string", "null"], maxLength: 160, description: "所属系列全名，按现有目录填写" },
+      topic: { type: ["string", "null"], maxLength: 160, description: "该系列下的主题或专题全名" },
+    },
+    additionalProperties: false,
+  },
+};
 
 const TOOLS = [
   {
@@ -194,7 +222,7 @@ const TOOLS = [
     name: "create_post",
     title: "新建文章（可直接发布）",
     description:
-      "把一篇文章写入博客。生成系列文章时主动填写 series 和 topic，沿用现有目录的名称；归属不明确或是独立文章时可省略。默认存为草稿；传 publish=true 则立即发布。正文优先用 HTML，纯 Markdown 会自动转换。摘要与标签由后端生成。",
+      "把一篇文章写入博客。生成系列文章时主动填写 memberships，沿用现有目录名称，并把每个主题与其所属系列放在同一项。归属不明确时可省略。默认存为草稿；传 publish=true 则立即发布。正文优先用 HTML，纯 Markdown 会自动转换。摘要与标签由后端生成。",
     inputSchema: {
       type: "object",
       properties: {
@@ -204,8 +232,9 @@ const TOOLS = [
           description: "文章正文，推荐 HTML 片段（<h2>、<p>、<ul>、<pre><code> 等）；仅当完全不含标签时按 Markdown 处理",
         },
         excerpt: { type: "string", maxLength: 500, description: "可选摘要，留空由后端自动生成" },
-        series: { type: "string", maxLength: 160, description: "所属系列全名，按既有目录填写；独立文章可省略" },
-        topic: { type: "string", maxLength: 160, description: "所属主题或专题全名；没有明确主题可省略" },
+        memberships: { ...membershipArray, description: "可选。每项是一组系列和主题，两者可只填其一。传 [] 表示独立文章" },
+        series: { type: "string", maxLength: 160, description: "旧版单组归属的系列名称。传 memberships 时以数组为准" },
+        topic: { type: "string", maxLength: 160, description: "旧版单组归属的主题名称。传 memberships 时以数组为准" },
         publish: {
           type: "boolean",
           default: false,
@@ -230,8 +259,9 @@ const TOOLS = [
           description: "新正文，推荐 HTML 片段；仅当完全不含标签时按 Markdown 处理；不传则不改",
         },
         excerpt: { type: "string", maxLength: 500, description: "新摘要，不传则不改" },
-        series: { type: "string", maxLength: 160, description: "新所属系列名称；不传则不改，空字符串清除" },
-        topic: { type: "string", maxLength: 160, description: "新所属主题名称；不传则不改，空字符串清除" },
+        memberships: { ...membershipArray, description: "替换全部归属。省略保留原归属，传 [] 清空" },
+        series: { type: "string", maxLength: 160, description: "修改第一项归属的系列名称。空字符串清除该字段" },
+        topic: { type: "string", maxLength: 160, description: "修改第一项归属的主题名称。空字符串清除该字段" },
         publish: {
           type: "boolean",
           description: "true 发布上线，false 退回草稿，不传则保持原状态",
@@ -272,7 +302,7 @@ function createServer() {
     {
       capabilities: { tools: {} },
       instructions:
-        "这是个人技术博客的接口，支持读取、存草稿、更新、删除与直接发布。用户问博客写过什么时，先用 search_posts 或 list_posts 定位，再用 get_post 读全文；要精确修改正文时，先用 get_post(raw=true) 拿原始 HTML（长文按 offset 分段取全）再调用 update_post。生成文章时调用 create_post，并主动填入已经确定的 series（系列全名）和 topic（主题全名），同一归属沿用现有目录名称；不确定时省略对应字段。默认存草稿，只有用户明确授权发布时才传 publish=true。修改已有文章时先定位 id，update_post 只传要修改的字段。只有用户明确要求删除时才调用 delete_posts、确认 id 并传 confirm=true。标签由服务端按正文生成。",
+        "这是个人技术博客的接口，支持读取、存草稿、更新、删除与直接发布。用户问博客写过什么时，先用 search_posts 或 list_posts 定位，再用 get_post 读全文；要精确修改正文时，先用 get_post(raw=true) 拿原始 HTML（长文按 offset 分段取全）再调用 update_post。生成文章时调用 create_post，主动填写已明确的 memberships，每项配对一个系列和其主题，沿用现有目录名称；独立文章或归属不明时可省略。默认存草稿，只有用户明确授权发布时才传 publish=true。修改已有文章时先定位 id，update_post 只传要修改的字段；调整归属时传所需的完整 memberships 数组。只有用户明确要求删除时才调用 delete_posts、确认 id 并传 confirm=true。标签由服务端按正文生成。",
     },
   );
 
@@ -309,8 +339,7 @@ function createServer() {
           const lines = [
             `标题：${post.title}`,
             `id=${post.id}，slug=${post.slug || post.id}`,
-            ...(post.series ? [`所属系列：${post.series}`] : []),
-            ...(post.topic ? [`所属主题：${post.topic}`] : []),
+            ...membershipLines(post),
             `原始 HTML 共 ${total} 字符，本次返回 ${offset}–${end}`,
             end < total
               ? `后面还有 ${total - end} 字符；继续读取传 offset=${end}。分段边界可能落在标签中间，按 offset 顺序拼接即可还原`
@@ -328,8 +357,7 @@ function createServer() {
         const tagLine = (post.tags || []).map((t) => t.name).join("、");
         const text = [
           `标题：${post.title}`,
-          ...(post.series ? [`所属系列：${post.series}`] : []),
-          ...(post.topic ? [`所属主题：${post.topic}`] : []),
+          ...membershipLines(post),
           `发布时间：${post.publishedAt || post.createdAt}`,
           `标签：${tagLine || "（无）"}`,
           `链接：https://47.116.6.132/blog/${post.slug || post.id}`,
@@ -364,6 +392,7 @@ function createServer() {
           title,
           content,
           ...(args.excerpt ? { excerpt: String(args.excerpt) } : {}),
+          ...(args.memberships !== undefined ? { memberships: args.memberships } : {}),
           ...(typeof args.series === "string" ? { series: args.series.trim() } : {}),
           ...(typeof args.topic === "string" ? { topic: args.topic.trim() } : {}),
           published: publish,
@@ -374,8 +403,7 @@ function createServer() {
           `${head}：id=${created.id}`,
           `标题：${created.title}`,
           `slug：${created.slug}`,
-          ...(created.series ? [`所属系列：${created.series}`] : []),
-          ...(created.topic ? [`所属主题：${created.topic}`] : []),
+          ...membershipLines(created),
           `标签：${tags || "（未生成）"}`,
         ];
         if (publish) lines.push(`文章链接：https://47.116.6.132/blog/${created.slug}`);
@@ -405,10 +433,11 @@ function createServer() {
         }
         if (typeof args.series === "string") patch.series = args.series.trim();
         if (typeof args.topic === "string") patch.topic = args.topic.trim();
+        if (args.memberships !== undefined) patch.memberships = args.memberships;
 
         if (Object.keys(patch).length === 0) {
           return {
-            content: [{ type: "text", text: "没有可更新的字段：请至少传 title、content、excerpt、series、topic 或 publish 之一" }],
+            content: [{ type: "text", text: "没有可更新的字段：请至少传 title、content、excerpt、memberships 或 publish 之一" }],
             isError: true,
           };
         }
@@ -420,8 +449,7 @@ function createServer() {
           `已更新：id=${updated.id}`,
           `标题：${updated.title}`,
           `slug：${updated.slug}`,
-          ...(updated.series ? [`所属系列：${updated.series}`] : []),
-          ...(updated.topic ? [`所属主题：${updated.topic}`] : []),
+          ...membershipLines(updated),
           `状态：${updated.published ? "已发布" : "草稿"}`,
           `标签：${tags || "（未生成）"}${touchedContent ? "（正文有改动，标签正在后台重算）" : ""}`,
         ];

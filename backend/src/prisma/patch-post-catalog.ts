@@ -5,21 +5,36 @@ export async function patchPostCatalog(prisma: PrismaClient) {
   return prisma.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(72731, 1)`;
     // 线上数据库由已有表结构初始化。列注释记录补录已完成，重跑时保留后来主动清空的归属。
-    const [marker] = await tx.$queryRaw<{ version: string | null }[]>`
-      SELECT col_description(attrelid, attnum) AS version FROM pg_attribute
-      WHERE attrelid = '"Post"'::regclass AND attname = 'series' AND NOT attisdropped
+    const markers = await tx.$queryRaw<{ column: string; version: string | null }[]>`
+      SELECT attname AS "column", col_description(attrelid, attnum) AS version FROM pg_attribute
+      WHERE attrelid = '"Post"'::regclass AND attname IN ('series', 'memberships') AND NOT attisdropped
     `;
-    if (marker?.version === 'blog-post-catalog-v2') return { applied: false, updated: 0 };
+    if (markers.some(marker => marker.column === 'memberships' && marker.version === 'blog-post-catalog-v3')) {
+      return { applied: false, updated: 0 };
+    }
 
-    const updated = marker?.version === 'blog-post-catalog-v1'
+    const legacyVersion = markers.find(marker => marker.column === 'series')?.version;
+    if (legacyVersion === 'blog-post-catalog-v1') {
       // 该专题在首版补录前刚改名。补上已识别为该专题、仍缺少系列的三篇正式篇目。
-      ? await tx.$executeRaw`
+      await tx.$executeRaw`
         UPDATE "Post" SET "series" = ${AI_ENGINEERING}
         WHERE "series" IS NULL AND "topic" = '代码分析与 Coding Agent'
           AND "slug" IN ('pswh9ei9k1q', 'cndb6wa3c98', 'dcab84w3q99')
-      `
-      : await backfillCatalog(tx);
+      `;
+    } else if (legacyVersion !== 'blog-post-catalog-v2') {
+      await backfillCatalog(tx);
+    }
     await tx.$executeRaw`COMMENT ON COLUMN "Post"."series" IS 'blog-post-catalog-v2'`;
+
+    await tx.$executeRaw`
+      ALTER TABLE "Post" ADD COLUMN IF NOT EXISTS "memberships" JSONB NOT NULL DEFAULT '[]'
+    `;
+    const updated = await tx.$executeRaw`
+      UPDATE "Post"
+      SET "memberships" = jsonb_build_array(jsonb_build_object('series', "series", 'topic', "topic"))
+      WHERE ("series" IS NOT NULL OR "topic" IS NOT NULL) AND "memberships" = '[]'
+    `;
+    await tx.$executeRaw`COMMENT ON COLUMN "Post"."memberships" IS 'blog-post-catalog-v3'`;
     return { applied: true, updated };
   }, { timeout: 60_000 });
 }

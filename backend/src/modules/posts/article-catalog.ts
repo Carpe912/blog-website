@@ -15,6 +15,21 @@ export function normalizeCatalogName(value?: string | null): string | null {
   return name && name.length <= CATALOG_NAME_MAX_LENGTH ? name : null;
 }
 
+export function normalizeMemberships(values: readonly Partial<ArticleCatalog>[]): ArticleCatalog[] {
+  const seen = new Set<string>();
+  const memberships: ArticleCatalog[] = [];
+  for (const value of values) {
+    const series = normalizeCatalogName(value.series);
+    const topic = normalizeCatalogName(value.topic);
+    if (!series && !topic) continue;
+    const key = JSON.stringify([series, topic]);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    memberships.push({ series, topic });
+  }
+  return memberships;
+}
+
 export const FRONTEND = 'AI 时代前端工程能力技术博客系列'
 export const AI_ENGINEERING = 'AI 系统与 Agent 工程'
 export const JAVASCRIPT = 'JavaScript 与编程语言核心机制'

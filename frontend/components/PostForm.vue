@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { CATALOG_NAME_MAX_LENGTH, normalizeMemberships } from '../../backend/src/modules/posts/article-catalog'
+
 /**
  * PostForm — 沉浸式写作界面
  *
@@ -16,16 +18,32 @@ const emit = defineEmits<{ submit: [data: any] }>()
 const form = reactive({
   title: '',
   content: '',
-  series: '',
-  topic: '',
   published: false,
 })
+
+const originalMemberships = computed(() => normalizeMemberships(props.initial?.memberships ?? [{
+  series: props.initial?.series,
+  topic: props.initial?.topic,
+}]))
+let nextMembershipKey = 0
+const membershipRows = ref(originalMemberships.value.map(({ series, topic }) => ({
+  key: nextMembershipKey++,
+  series: series ?? '',
+  topic: topic ?? '',
+})))
+
+function addMembership() {
+  membershipRows.value.push({ key: nextMembershipKey++, series: '', topic: '' })
+}
+
+if (!membershipRows.value.length) addMembership()
+
+const memberships = computed(() => normalizeMemberships(membershipRows.value))
+const membershipsChanged = computed(() => JSON.stringify(memberships.value) !== JSON.stringify(originalMemberships.value))
 
 if (props.initial) {
   form.title = props.initial.title ?? ''
   form.content = props.initial.content ?? ''
-  form.series = props.initial.series ?? ''
-  form.topic = props.initial.topic ?? ''
   form.published = props.initial.published ?? false
 }
 
@@ -53,12 +71,11 @@ const plainText = computed(() =>
 
 const canSubmit = computed(() => form.title.trim().length > 0 && plainText.value.length > 0)
 const isDirty = computed(() => {
-  if (!props.initial) return Boolean(form.title.trim() || plainText.value || form.series.trim() || form.topic.trim())
+  if (!props.initial) return Boolean(form.title.trim() || plainText.value || membershipsChanged.value)
   return (
     form.title !== (props.initial.title ?? '') ||
     form.content !== (props.initial.content ?? '') ||
-    form.series !== (props.initial.series ?? '') ||
-    form.topic !== (props.initial.topic ?? '') ||
+    membershipsChanged.value ||
     form.published !== (props.initial.published ?? false)
   )
 })
@@ -73,8 +90,7 @@ function save(published: boolean) {
   emit('submit', {
     title: form.title.trim(),
     content: form.content,
-    ...(form.series.trim() !== (props.initial?.series ?? '') ? { series: form.series.trim() || null } : {}),
-    ...(form.topic.trim() !== (props.initial?.topic ?? '') ? { topic: form.topic.trim() || null } : {}),
+    ...(membershipsChanged.value ? { memberships: memberships.value } : {}),
     published,
   })
 }
@@ -168,16 +184,21 @@ const router = useRouter()
         <span>支持 Markdown 快捷输入</span>
       </div>
 
-      <div class="mt-5 grid gap-3 sm:grid-cols-2">
-        <label class="grid gap-1.5 text-xs font-medium text-slate-600 dark:text-ink-300">
-          所属系列（选填）
-          <input v-model="form.series" type="text" maxlength="160" class="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm text-slate-900 dark:border-ink-700 dark:text-ink-100" />
-        </label>
-        <label class="grid gap-1.5 text-xs font-medium text-slate-600 dark:text-ink-300">
-          所属主题（选填）
-          <input v-model="form.topic" type="text" maxlength="160" class="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm text-slate-900 dark:border-ink-700 dark:text-ink-100" />
-        </label>
-      </div>
+      <fieldset class="mt-5 min-w-0 space-y-3">
+        <legend class="text-xs font-medium text-slate-600 dark:text-ink-300">文章归属（选填）</legend>
+        <div v-for="(row, index) in membershipRows" :key="row.key" class="grid items-end gap-2 sm:grid-cols-[1fr_1fr_auto]">
+          <label class="grid gap-1.5 text-xs font-medium text-slate-600 dark:text-ink-300">
+            所属系列
+            <input v-model="row.series" type="text" :maxlength="CATALOG_NAME_MAX_LENGTH" class="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm text-slate-900 dark:border-ink-700 dark:text-ink-100" />
+          </label>
+          <label class="grid gap-1.5 text-xs font-medium text-slate-600 dark:text-ink-300">
+            所属主题
+            <input v-model="row.topic" type="text" :maxlength="CATALOG_NAME_MAX_LENGTH" class="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm text-slate-900 dark:border-ink-700 dark:text-ink-100" />
+          </label>
+          <button type="button" class="btn-ghost justify-self-end" :aria-label="`移除第 ${index + 1} 项归属`" @click="membershipRows.splice(index, 1)">移除</button>
+        </div>
+        <button type="button" class="btn-ghost" @click="addMembership">添加归属</button>
+      </fieldset>
 
       <!-- 正文 -->
       <div class="mt-7 -mx-2 sm:mx-0">

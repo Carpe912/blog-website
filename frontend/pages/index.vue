@@ -44,27 +44,53 @@ const allPosts = computed<ArchivePost[]>(() => {
 })
 
 const articleGroups = computed(() => indexArticleGroups(allPosts.value))
-const activeSeries = useState('blog-series-filter', () => '')
+const activeSeries = useState<string[]>('blog-series-filters', () => [])
+const selectedSeries = computed(() => new Set(activeSeries.value))
 const postIdsBySeries = computed(() => {
   const idsBySeries = new Map<string, Set<number>>()
   for (const post of allPosts.value) {
-    const series = articleGroups.value.positions.get(post.slug)?.find(position => position.kind === 'series')
-    if (!series) continue
-    if (!idsBySeries.has(series.title)) idsBySeries.set(series.title, new Set())
-    idsBySeries.get(series.title)!.add(post.id)
+    for (const { kind, title } of articleGroups.value.positions.get(post.slug) ?? []) {
+      if (kind !== 'series') continue
+      if (!idsBySeries.has(title)) idsBySeries.set(title, new Set())
+      idsBySeries.get(title)!.add(post.id)
+    }
   }
   return idsBySeries
 })
 const seriesOptions = computed(() => [...postIdsBySeries.value.keys()])
-const seriesScope = computed(() => postIdsBySeries.value.get(activeSeries.value))
+const seriesScope = computed(() => {
+  if (!selectedSeries.value.size) return undefined
+  const scope = new Set<number>()
+  for (const title of selectedSeries.value) {
+    for (const id of postIdsBySeries.value.get(title) ?? []) scope.add(id)
+  }
+  return scope
+})
 const seriesPosts = computed(() => {
   const scope = seriesScope.value
   return scope ? allPosts.value.filter(post => scope.has(post.id)) : allPosts.value
 })
 
 watch(seriesOptions, (options) => {
-  if (activeSeries.value && !options.includes(activeSeries.value)) activeSeries.value = ''
+  const available = activeSeries.value.filter(title => options.includes(title))
+  if (available.length !== activeSeries.value.length) activeSeries.value = available
 }, { immediate: true })
+
+const seriesFilter = ref<HTMLDetailsElement | null>(null)
+function closeSeriesFilter(event: Event) {
+  const filter = seriesFilter.value
+  if (filter?.open && !filter.contains(event.target as Node)) filter.open = false
+}
+
+function dismissSeriesFilter() {
+  const filter = seriesFilter.value
+  if (!filter?.open) return
+  filter.open = false
+  filter.querySelector('summary')?.focus()
+}
+
+onMounted(() => document.addEventListener('click', closeSeriesFilter))
+onUnmounted(() => document.removeEventListener('click', closeSeriesFilter))
 
 // 搜索：走接口的语义搜索，能按「概念」找文章（如搜 cordis 会带出讲 Cordis 的几篇）
 const searchQuery = useState('blog-search', () => '')
@@ -187,8 +213,8 @@ const filteredPosts = computed(() => {
 
 const openCatalog = shallowRef<{ group: ArticleGroup; currentSlug?: string } | null>(null)
 
-function openArticleCatalog(slug: string, kind: ArticlePosition['kind']) {
-  const group = articleGroups.value[kind].get(slug)
+function openArticleCatalog(slug: string, groupKey: string) {
+  const group = articleGroups.value.byKey.get(groupKey)
   if (group) openCatalog.value = { group, currentSlug: slug }
 }
 
@@ -197,16 +223,22 @@ type ArchiveCard = { group: ArticleGroup; key: string }
 const archiveCards = computed(() => {
   const cards: ArchiveCard[] = []
   const groups = articleGroups.value
-  const groupsBySlug = grouping.value === 'article' ? undefined : groups[grouping.value]
-  const seen = new Set<ArticleGroup>()
+  const seen = new Set<string>()
   for (const post of filteredPosts.value) {
-    const group = groupsBySlug?.get(post.slug)
-    if (!group || group.count < 2) {
-      cards.push({ post, key: post.slug, positions: groups.positions.get(post.slug) ?? [] })
-    } else if (!seen.has(group)) {
+    const positions = groups.positions.get(post.slug) ?? []
+    let stacked = false
+    for (const position of positions) {
+      if (position.kind !== grouping.value) continue
+      const series = position.kind === 'series' ? position.title : position.parentSeries
+      if (selectedSeries.value.size && (!series || !selectedSeries.value.has(series))) continue
+      const group = groups.byKey.get(position.groupKey)
+      if (!group || group.count < 2) continue
+      stacked = true
+      if (seen.has(group.key)) continue
       cards.push({ group, key: group.key })
-      seen.add(group)
+      seen.add(group.key)
     }
+    if (!stacked) cards.push({ post, key: post.slug, positions })
   }
   return cards
 })
@@ -274,15 +306,39 @@ function formatDate(date: string) {
               class="min-h-10 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-[var(--reader-ink)] placeholder:text-[var(--reader-muted)]"
             />
           </label>
-          <select
+          <details
             v-if="seriesOptions.length"
-            v-model="activeSeries"
-            aria-label="按系列筛选"
-            class="min-h-[2.625rem] w-full min-w-0 truncate rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-sm text-[var(--reader-ink)] sm:w-60"
+            ref="seriesFilter"
+            class="series-filter relative w-full min-w-0 text-sm text-[var(--reader-ink)] sm:w-60"
+            @keydown.esc.stop="dismissSeriesFilter"
           >
-            <option value="">全部系列</option>
-            <option v-for="series in seriesOptions" :key="series" :value="series">{{ series }}</option>
-          </select>
+            <summary class="flex min-h-[2.625rem] cursor-pointer list-none items-center justify-between gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3">
+              <span class="sr-only">按系列筛选</span>
+              <span class="truncate">{{ activeSeries.length === 1 ? activeSeries[0] : activeSeries.length ? `已选 ${activeSeries.length} 个系列` : '全部系列' }}</span>
+              <svg aria-hidden="true" class="series-chevron h-3.5 w-3.5 shrink-0 text-[var(--reader-muted)]" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="m4 6 4 4 4-4" />
+              </svg>
+            </summary>
+            <fieldset class="absolute inset-x-0 top-full z-20 mt-1 max-h-64 min-w-0 overflow-y-auto rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] p-1.5 shadow-lg">
+              <legend class="sr-only">按系列筛选（可多选）</legend>
+              <button
+                v-if="activeSeries.length"
+                type="button"
+                class="mb-1 rounded px-2 py-1 text-xs text-[var(--reader-muted)] hover:text-[var(--reader-ink)]"
+                @click="activeSeries = []; dismissSeriesFilter()"
+              >
+                清除系列筛选
+              </button>
+              <label
+                v-for="series in seriesOptions"
+                :key="series"
+                class="flex min-h-9 cursor-pointer items-center gap-2 rounded px-2 py-1.5 hover:bg-[var(--reader-paper)]"
+              >
+                <input v-model="activeSeries" :value="series" type="checkbox" class="size-4 shrink-0 accent-[var(--reader-accent)]" />
+                <span class="min-w-0 flex-1 break-words">{{ series }}</span>
+              </label>
+            </fieldset>
+          </details>
           <fieldset class="flex min-w-0 flex-wrap gap-0.5 self-start rounded-md border border-[var(--reader-line)] p-0.5 sm:shrink-0">
             <legend class="sr-only">卡片分组方式</legend>
             <label v-for="option in groupingOptions" :key="option.value" class="grouping-option cursor-pointer">
@@ -406,14 +462,17 @@ function formatDate(date: string) {
               <div v-if="card.positions.length" role="group" aria-label="文章归属" class="card-placement">
                 <button
                   v-for="position in card.positions"
-                  :key="position.kind"
+                  :key="position.groupKey"
                   type="button"
                   aria-haspopup="dialog"
                   class="relative z-10 flex min-h-6 w-full items-baseline gap-2 rounded-sm py-0.5 text-left hover:text-[var(--reader-ink)]"
-                  @click="openArticleCatalog(card.post.slug, position.kind)"
+                  @click="openArticleCatalog(card.post.slug, position.groupKey)"
                 >
                   <span class="card-placement-label">{{ position.kind === 'series' ? '所属系列' : '所属专题' }}</span>
-                  <span class="min-w-0 flex-1 break-words font-medium underline decoration-[var(--reader-line)] underline-offset-2">{{ position.title }}</span>
+                  <span class="min-w-0 flex-1 break-words">
+                    <span class="font-medium underline decoration-[var(--reader-line)] underline-offset-2">{{ position.title }}</span>
+                    <span v-if="position.parentSeries && card.positions.length > 2" class="block opacity-75">{{ position.parentSeries }}</span>
+                  </span>
                   <span class="shrink-0 tabular-nums">{{ position.index }}/{{ position.total }}</span>
                 </button>
               </div>
@@ -521,6 +580,14 @@ function formatDate(date: string) {
 
 .archive-search input:focus {
   outline: none;
+}
+
+.series-filter summary::-webkit-details-marker {
+  display: none;
+}
+
+.series-filter[open] .series-chevron {
+  transform: rotate(180deg);
 }
 
 /* 标签统一用宋体，与站点标题一致 */

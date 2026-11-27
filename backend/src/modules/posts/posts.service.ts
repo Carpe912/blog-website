@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, ConflictException } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { AiService } from './ai.service';
 import { EmbeddingService, cosineSimilarity } from './embedding.service';
@@ -6,7 +7,15 @@ import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostDto } from './dto/query-post.dto';
 import { TAG_RULES } from './tag-vocabulary';
-import { inferLegacyCatalog, normalizeCatalogName, readCatalogHeader } from './article-catalog';
+import { inferLegacyCatalog, normalizeMemberships, readCatalogHeader, type ArticleCatalog } from './article-catalog';
+
+function catalogFields(memberships: ArticleCatalog[]) {
+  return {
+    series: memberships[0]?.series ?? null,
+    topic: memberships[0]?.topic ?? null,
+    memberships: memberships.map(({ series, topic }) => ({ series, topic })),
+  };
+}
 
 /** 去掉 HTML 标签与实体，得到纯文本 */
 function plainText(html: string): string {
@@ -166,6 +175,7 @@ const POST_SELECT = {
   content: true,
   series: true,
   topic: true,
+  memberships: true,
   published: true,
   publishedAt: true,
   createdAt: true,
@@ -320,9 +330,11 @@ export class PostsService {
   async create(dto: CreatePostDto) {
     const slug = await this.resolveSlug(dto.slug);
     const published = dto.published ?? false;
-    const catalog = dto.series === undefined && dto.topic === undefined
-      ? inferLegacyCatalog(slug, readCatalogHeader(dto.content))
-      : { series: normalizeCatalogName(dto.series), topic: normalizeCatalogName(dto.topic) };
+    const memberships = normalizeMemberships(dto.memberships ?? [
+      dto.series === undefined && dto.topic === undefined
+        ? inferLegacyCatalog(slug, readCatalogHeader(dto.content))
+        : { series: dto.series, topic: dto.topic },
+    ]);
 
     // 摘要与标签都靠模型生成，并行跑，避免串行等待
     const [excerpt, tagNames] = await Promise.all([
@@ -336,7 +348,7 @@ export class PostsService {
         slug,
         content: dto.content,
         excerpt,
-        ...catalog,
+        ...catalogFields(memberships),
         published,
         publishedAt: published ? new Date() : null,
       },
@@ -363,7 +375,7 @@ export class PostsService {
 
   async update(id: number, dto: UpdatePostDto) {
     const current: any = await this.findOne(id);
-    const { published, excerpt, slug, series, topic, ...postData } = dto;
+    const { published, excerpt, slug, memberships, series, topic, ...postData } = dto;
 
     if (slug && slug !== current.slug) {
       const conflict = await this.prisma.post.findFirst({
@@ -394,18 +406,33 @@ export class PostsService {
           ? null
           : undefined;
 
-    await this.prisma.post.update({
-      where: { id },
-      data: {
-        ...postData,
-        ...(slug ? { slug } : {}),
-        ...(series !== undefined ? { series: normalizeCatalogName(series) } : {}),
-        ...(topic !== undefined ? { topic: normalizeCatalogName(topic) } : {}),
-        excerpt: nextExcerpt,
-        ...(published !== undefined ? { published } : {}),
-        ...(publishedAt !== undefined ? { publishedAt } : {}),
-      },
-    });
+    const data: Prisma.PostUpdateInput = {
+      ...postData,
+      ...(slug ? { slug } : {}),
+      excerpt: nextExcerpt,
+      ...(published !== undefined ? { published } : {}),
+      ...(publishedAt !== undefined ? { publishedAt } : {}),
+    };
+    if (memberships === undefined && (series !== undefined || topic !== undefined)) {
+      // 兼容旧接口的局部更新，读取第一项时锁定行，保留已保存的其他归属。
+      await this.prisma.$transaction(async tx => {
+        const [row] = await tx.$queryRaw<{ memberships: ArticleCatalog[] }[]>`
+          SELECT "memberships" FROM "Post" WHERE "id" = ${id} FOR UPDATE
+        `;
+        if (!row) throw new NotFoundException(`文章 #${id} 不存在`);
+        const [first, ...rest] = row.memberships;
+        const next = normalizeMemberships([{
+          series: series === undefined ? first?.series : series,
+          topic: topic === undefined ? first?.topic : topic,
+        }, ...rest]);
+        await tx.post.update({ where: { id }, data: { ...data, ...catalogFields(next) } });
+      });
+    } else {
+      await this.prisma.post.update({
+        where: { id },
+        data: memberships === undefined ? data : { ...data, ...catalogFields(normalizeMemberships(memberships)) },
+      });
+    }
 
     const updated: any = await this.findOne(id);
     this.invalidateCorpusCache();
@@ -808,6 +835,7 @@ export class PostsService {
       slug: true,
       series: true,
       topic: true,
+      memberships: true,
       excerpt: true,
       content: true,
       createdAt: true,

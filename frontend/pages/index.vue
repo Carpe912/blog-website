@@ -309,15 +309,19 @@ function formatDate(date: string) {
               class="archive-stack-front flex min-h-48 min-w-0 flex-col rounded-xl border p-5 text-left transition-colors"
               @click="selectedGroup = card.group"
             >
-              <span class="text-xs font-medium tabular-nums text-[var(--reader-accent)]">
-                <template v-if="card.group.topicPosition">专题 {{ card.group.topicPosition.index }}/{{ card.group.topicPosition.total }}</template>
-                <template v-else>系列</template>
+              <span class="text-xs tabular-nums text-[var(--reader-muted)]">
+                {{ card.group.kind === 'topic' ? '专题' : '系列' }}
                 · {{ card.group.count }} 篇<template v-if="card.group.topicCount"> · {{ card.group.topicCount }} 个专题</template>
               </span>
               <span class="reader-display mt-3 line-clamp-3 text-xl font-bold leading-snug">{{ card.group.title }}</span>
               <span v-if="card.group.description" class="reader-display mt-2 line-clamp-2 text-sm leading-relaxed text-[var(--reader-muted)]">{{ card.group.description }}</span>
-              <span class="mt-auto pt-3">
-                <span class="flex items-center justify-between gap-2 border-t border-[var(--reader-line)] pt-2 text-sm font-medium text-[var(--reader-accent)]">
+              <span class="mt-auto space-y-2.5 pt-3">
+                <span v-if="card.group.parentSeries" class="card-placement flex items-baseline gap-2">
+                  <span class="card-placement-label">所属系列</span>
+                  <span class="min-w-0 flex-1 break-words font-medium">{{ card.group.parentSeries }}</span>
+                  <span v-if="card.group.topicPosition" class="shrink-0 text-xs tabular-nums">{{ card.group.topicPosition.index }}/{{ card.group.topicPosition.total }}</span>
+                </span>
+                <span class="flex items-center justify-between gap-2 border-t border-[var(--reader-line)] pt-2 text-sm text-[var(--reader-muted)]">
                   {{ card.group.kind === 'topic' ? '查看专题目录' : '查看系列目录' }} <span aria-hidden="true">→</span>
                 </span>
               </span>
@@ -343,16 +347,7 @@ function formatDate(date: string) {
             <p v-if="card.post.excerpt" class="reader-display mt-2 line-clamp-3 text-sm leading-relaxed text-[var(--reader-muted)]">
               {{ card.post.excerpt }}
             </p>
-            <div v-if="card.positions.length || card.post.tags?.length" class="mt-auto space-y-2 pt-4">
-              <dl v-if="card.positions.length" class="space-y-1 text-xs text-[var(--reader-muted)]">
-                <div v-for="position in card.positions" :key="position.kind" class="flex items-baseline gap-2">
-                  <dt class="shrink-0 text-[var(--reader-accent)]">{{ position.kind === 'series' ? '系列' : '专题' }}</dt>
-                  <dd class="flex min-w-0 flex-1 items-baseline gap-2">
-                    <span class="min-w-0 flex-1 break-words">{{ position.title }}</span>
-                    <span class="shrink-0 tabular-nums">{{ position.index }}/{{ position.total }}</span>
-                  </dd>
-                </div>
-              </dl>
+            <div v-if="card.positions.length || card.post.tags?.length" class="mt-auto space-y-2.5 pt-4">
               <div v-if="card.post.tags?.length" role="group" aria-label="文章标签" class="tag-text flex flex-wrap gap-1.5 text-xs">
                 <button
                   v-for="tag in card.post.tags"
@@ -368,6 +363,15 @@ function formatDate(date: string) {
                   #{{ tag.name }}
                 </button>
               </div>
+              <dl v-if="card.positions.length" class="card-placement space-y-1">
+                <div v-for="position in card.positions" :key="position.kind" class="flex items-baseline gap-2">
+                  <dt class="card-placement-label">{{ position.kind === 'series' ? '所属系列' : '所属专题' }}</dt>
+                  <dd class="flex min-w-0 flex-1 items-baseline gap-2">
+                    <span class="min-w-0 flex-1 break-words font-medium">{{ position.title }}</span>
+                    <span class="shrink-0 text-xs tabular-nums">{{ position.index }}/{{ position.total }}</span>
+                  </dd>
+                </div>
+              </dl>
             </div>
           </li>
         </template>
@@ -391,17 +395,12 @@ function formatDate(date: string) {
   grid-auto-rows: 1fr;
 }
 
-.archive-stack {
-  --stack-border: color-mix(in srgb, var(--reader-line) 74%, var(--reader-accent));
-  --stack-page: color-mix(in srgb, var(--reader-surface) 94%, var(--reader-accent));
-}
-
 .archive-stack::before,
 .archive-stack::after {
   position: absolute;
   inset: 0;
   z-index: -1;
-  border: 1px solid var(--stack-border);
+  border: 1px solid var(--reader-line);
   border-radius: 0.75rem;
   pointer-events: none;
   content: '';
@@ -409,21 +408,32 @@ function formatDate(date: string) {
 
 .archive-stack::before {
   transform: translate(7px, 10px);
-  background: color-mix(in srgb, var(--stack-page) 84%, var(--reader-accent));
+  background: color-mix(in srgb, var(--reader-surface) 91%, var(--reader-ink));
 }
 
 .archive-stack::after {
   transform: translate(3.5px, 5px);
-  background: color-mix(in srgb, var(--stack-page) 92%, var(--reader-accent));
+  background: color-mix(in srgb, var(--reader-surface) 96%, var(--reader-ink));
 }
 
 .archive-stack-front {
-  border-color: var(--stack-border);
-  background: var(--stack-page);
+  border-color: var(--reader-line);
+  background: var(--reader-surface);
 }
 
 .archive-stack-front:is(:hover, :focus-visible) {
-  border-color: var(--reader-accent);
+  border-color: var(--reader-muted);
+}
+
+.card-placement {
+  color: var(--reader-muted);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.card-placement-label {
+  flex-shrink: 0;
+  font-size: 0.75rem;
 }
 
 .grouping-option span {

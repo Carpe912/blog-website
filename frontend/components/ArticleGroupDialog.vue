@@ -24,8 +24,11 @@ function closeOnBackdrop(event: MouseEvent) {
   >
     <header class="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--reader-line)] bg-[var(--reader-surface)] p-4 sm:p-5">
       <div class="min-w-0">
-        <p id="article-group-count" class="mb-1 text-sm font-medium tabular-nums text-[var(--reader-accent)]">{{ group.count }} 篇文章</p>
+        <p id="article-group-count" class="mb-1 text-sm tabular-nums text-[var(--reader-muted)]">{{ group.count }} 篇文章</p>
         <h2 id="article-group-title" class="reader-display text-xl font-bold leading-snug sm:text-2xl">{{ group.title }}</h2>
+        <p v-if="group.parentSeries" class="mt-2 text-sm text-[var(--reader-muted)]">
+          <span class="mr-2 text-xs">所属系列</span><span class="font-medium">{{ group.parentSeries }}</span>
+        </p>
       </div>
       <button
         type="button"

@@ -15,13 +15,18 @@ interface Chapter {
   topicOrder?: number
   number?: number
   total?: number
+  seriesPosition?: Position
+  topicPosition?: Position
 }
 
-export interface ArticlePosition {
-  kind: 'topic' | 'series'
-  title: string
+interface Position {
   index: number
   total: number
+}
+
+export interface ArticlePosition extends Position {
+  kind: 'topic' | 'series'
+  title: string
 }
 
 export interface ArticleGroup {
@@ -29,13 +34,15 @@ export interface ArticleGroup {
   key: string
   title: string
   description?: string
+  parentSeries?: string
   count: number
   topicCount?: number
-  topicPosition?: { index: number; total: number }
+  topicPosition?: Position
   sections: { topic: string; chapters: Chapter[] }[]
 }
 
 const FRONTEND = 'AI 时代前端工程能力技术博客系列'
+const AI_ENGINEERING = 'AI 系统与 Agent 工程'
 const JAVASCRIPT = 'JavaScript 与编程语言核心机制'
 const ONTOLOGY = '本体论与知识图谱'
 const MCP = 'MCP 协议与 SDK 工程实践'
@@ -43,6 +50,7 @@ const HARNESS = 'DeepSeek Harness 源码解析'
 
 const descriptions = new Map([
   [FRONTEND, '从 JavaScript、浏览器到前端架构与响应式系统。'],
+  [AI_ENGINEERING, '从操作系统、大模型到 Agent、RAG 和业务流程工程。'],
   [JAVASCRIPT, '从对象模型、异步执行到类型转换与元编程。'],
   [ONTOLOGY, '从知识表示与领域本体到知识图谱和业务智能。'],
   [MCP, '从 JSON-RPC 和传输机制到 MCP 客户端与 SDK。'],
@@ -68,6 +76,16 @@ const ontologyTopics = new Set([
   '知识图谱的工程化建模与数据治理',
   '知识图谱查询、检索与数据集成',
   '本体驱动的 Agent 应用与业务智能系统',
+])
+
+const aiEngineeringTopics = new Set([
+  '操作系统与系统编程',
+  '大模型原理与工程应用',
+  '通用 Agent Harness 工程',
+  '信息检索与 RAG 工程',
+  '编译原理与 Coding Agent',
+  '业务流程建模与工作流',
+  'SQL 与数据库应用工程',
 ])
 
 // 两套历史 JavaScript 篇目使用过同一个专题名，正式目录的前七篇以 slug 区分。
@@ -100,27 +118,47 @@ function readHeader(content: string) {
     .filter(Boolean)
     .slice(0, 4)
 
-  const seriesLine = lines.find(line => /^系列\s*[:：]/.test(line)) ?? ''
-  const series = seriesLine.replace(/^系列\s*[:：]\s*/, '').split(/[｜|]|\s+·\s+(?=专题|篇目|第)/)[0]?.trim()
-  const topicLine = lines.find(line => /^专题(?:[一二三四五六七八九十\d]+)?\s*[:：]/.test(line)) ?? ''
+  const fields = lines
+    .flatMap(line => line.split(/[｜|]|\s+·\s+(?=系列|专题|主题|总篇目|篇目|第)/))
+    .map(field => field.trim())
+  const metadata = fields.join('\n')
+  const series = metadata.match(/^(?:所属)?系列\s*[:：]\s*([^\n]+)/m)?.[1]?.trim()
+  const topicLine = fields.find(field => /^(?:专题|主题)(?:[一二三四五六七八九十\d]+)?\s*[:：]/.test(field)) ?? ''
   const topic = topicLine
-    .replace(/^专题\s*[:：]\s*/, '')
-    .replace(/^专题[一二三四五六七八九十\d]+\s*[:：]\s*/, '')
-    .split(/[｜|]|\s+·\s+补充专题/)[0]?.trim() ?? ''
-  const chapter = lines.join('\n').match(
-    /(?:^|[\n｜|]|\s+·\s+)\s*(?:篇目(?:编号)?\s*[:：]\s*(?:第\s*)?(\d+)(?:\s*[/／]\s*(\d+))?|第\s*(\d+)\s*篇)/,
-  )
+    .replace(/^(?:专题|主题)\s*[:：]\s*/, '')
+    .replace(/^(?:专题|主题)[一二三四五六七八九十\d]+\s*[:：]\s*/, '')
+    .replace(/\s+·\s+补充专题$/, '')
+    .trim()
+  const chapter = metadata.match(/^(?:篇目(?:编号)?\s*[:：]\s*(?:第\s*)?(\d+)(?:\s*[/／]\s*(\d+))?|第\s*(\d+)\s*篇)/m)
+  const seriesPosition = readPosition(metadata.match(/^总篇目\s*[:：]\s*(\d+)\s*[/／]\s*(\d+)/m))
+  const topicPosition = readPosition(metadata.match(/^(?:专题|主题)篇目\s*[:：]\s*(\d+)\s*[/／]\s*(\d+)/m))
 
-  return { series, topic, number: Number(chapter?.[1] ?? chapter?.[3]) || undefined, total: Number(chapter?.[2]) || undefined }
+  return {
+    series,
+    topic,
+    number: seriesPosition?.index ?? (Number(chapter?.[1] ?? chapter?.[3]) || undefined),
+    total: seriesPosition?.total ?? (Number(chapter?.[2]) || undefined),
+    seriesPosition,
+    topicPosition,
+  }
+}
+
+function readPosition(match: RegExpMatchArray | null): Position | undefined {
+  if (!match) return
+  const index = Number(match[1])
+  const total = Number(match[2])
+  if (index > 0 && index <= total) return { index, total }
 }
 
 function getPlacement(post: ArchivePost) {
-  const { series, topic, number, total } = readHeader(post.content ?? '')
+  const { series, topic, ...chapterMetadata } = readHeader(post.content ?? '')
+  const { number, seriesPosition } = chapterMetadata
   const topicOrder = frontendTopics.findIndex(names => names.includes(topic))
-  const chapter: Chapter = { post, topic, number, total }
+  const chapter: Chapter = { post, topic, ...chapterMetadata }
 
   if (series && series !== FRONTEND) return { title: series, chapter }
   if (standaloneExtensions.has(post.slug)) return
+  if (seriesPosition?.total === 41 && aiEngineeringTopics.has(topic)) return { title: AI_ENGINEERING, chapter }
 
   if (series === FRONTEND || (topicOrder > 0 && number) || frontendJavaScript.has(post.slug)) {
     chapter.topic = frontendTopics[topicOrder]?.[0] ?? topic
@@ -176,12 +214,22 @@ export function indexArticleGroups(posts: ArchivePost[]) {
     // 序号跟随完整目录的顺序，搜索或标签筛选只改变可见卡片。
     let seriesIndex = 0
     for (const section of sections) {
-      for (const [index, { post }] of section.chapters.entries()) {
+      for (const [index, chapter] of section.chapters.entries()) {
+        const { post } = chapter
+        seriesIndex += 1
         const articlePositions: ArticlePosition[] = [
-          { kind: 'series', title, index: ++seriesIndex, total: chapters.length },
+          {
+            kind: 'series',
+            title,
+            ...(chapter.seriesPosition ?? { index: seriesIndex, total: chapters.length }),
+          },
         ]
         if (section.topic) {
-          articlePositions.push({ kind: 'topic', title: section.topic, index: index + 1, total: section.chapters.length })
+          articlePositions.push({
+            kind: 'topic',
+            title: section.topic,
+            ...(chapter.topicPosition ?? { index: index + 1, total: section.chapters.length }),
+          })
         }
         positions.set(post.slug, articlePositions)
         if (series.count > 1) bySeries.set(post.slug, series)
@@ -194,7 +242,7 @@ export function indexArticleGroups(posts: ArchivePost[]) {
         kind: 'topic',
         key: `topic:${JSON.stringify([title, section.topic])}`,
         title: section.topic,
-        description: title,
+        parentSeries: title,
         count: section.chapters.length,
         topicPosition: { index: index + 1, total: namedTopics.length },
         sections: [{ topic: '', chapters: section.chapters }],

@@ -183,7 +183,10 @@ const POST_SELECT = {
   tags: { select: { tag: { select: { id: true, name: true, slug: true } } } },
 } as const;
 
-/** 列表页同样返回 content，前端据此计算阅读时间 */
+/**
+ * 列表选择器仍要查 content —— 阅读时间按正文字数计算，
+ * 但响应里会由 formatPost 剔除，避免全量列表把 8MB 正文传给前端。
+ */
 const POST_LIST_SELECT = POST_SELECT;
 
 @Injectable()
@@ -221,7 +224,7 @@ export class PostsService {
     ]);
 
     return {
-      data: items.map((item) => this.formatPost(item)),
+      data: items.map((item) => this.formatPost(item, false)),
       meta: { total, page, limit, totalPages: Math.ceil(total / limit) },
     };
   }
@@ -1058,13 +1061,20 @@ export class PostsService {
   }
 
   // ── 工具 ─────────────────────────────────────────────────────────────────
-  private formatPost(post: any) {
+  private formatPost(post: any, withContent = true) {
     // 中文约 400 字/分钟，最少 1 分钟
     const readingTime = Math.max(1, Math.round((post.content ?? '').length / 400));
     // Prisma 返回的是 PostTag 关联数组，摊平成标签对象
     const tags = Array.isArray(post.tags)
       ? post.tags.map((item: any) => item.tag).filter(Boolean)
       : [];
-    return { ...post, tags, readingTime };
+    if (withContent) return { ...post, tags, readingTime };
+    // 列表接口不传正文：单篇几十 KB，全量一百多篇会有 8MB。
+    // 有旧文章没录 memberships，用正文头部的目录信息补一次，避免前端丢掉归属。
+    const { content, ...rest } = post;
+    const memberships = Array.isArray(post.memberships) && post.memberships.length
+      ? post.memberships
+      : normalizeMemberships([inferLegacyCatalog(post.slug, readCatalogHeader(content ?? ''))]);
+    return { ...rest, memberships, tags, readingTime };
   }
 }

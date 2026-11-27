@@ -49,6 +49,7 @@ const aiEngineeringTopics = new Set([
   '通用 Agent Harness 工程',
   '信息检索与 RAG 工程',
   '编译原理与 Coding Agent',
+  '代码分析与 Coding Agent',
   '业务流程建模与工作流',
   'SQL 与数据库应用工程',
   '服务部署与分布式工程',

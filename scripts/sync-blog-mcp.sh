@@ -14,7 +14,18 @@ fi
 export PATH="$HOME/.nvm/versions/node/$node_version/bin:$PATH"
 
 if ! pm2 describe blog-mcp >/dev/null 2>&1; then
-  echo "博客 MCP 进程未注册，跳过同步"
+  # 部分机器最初通过 root 的 PM2 启动博客工具。
+  if [ "$deploy_user" != root ] && sudo -n -H env PATH="$PATH" pm2 describe blog-mcp >/dev/null 2>&1; then
+    exec sudo -n -H env PATH="$PATH" DEPLOY_USER=root NODE_VERSION="$node_version" bash "$script_path"
+  fi
+  if [ -f "$project_dir/mcp-server/index.mjs" ]; then
+    echo "存在博客 MCP 运行文件，但部署账号和可访问的管理账号下没有 blog-mcp 进程"
+  else
+    echo "此服务器未找到博客 MCP 运行目录"
+  fi
+  if command -v ss >/dev/null 2>&1 && [ -n "$(ss -H -ltn 'sport = :3010')" ]; then
+    echo "本机 3010 端口仍有服务监听"
+  fi
   exit 0
 fi
 

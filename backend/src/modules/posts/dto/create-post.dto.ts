@@ -6,6 +6,7 @@ import {
   Matches,
   MaxLength,
 } from 'class-validator';
+import { CATALOG_NAME_MAX_LENGTH } from '../article-catalog';
 
 export class CreatePostDto {
   @IsString()
@@ -33,6 +34,16 @@ export class CreatePostDto {
   @IsString()
   @MaxLength(500)
   excerpt?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(CATALOG_NAME_MAX_LENGTH)
+  series?: string | null;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(CATALOG_NAME_MAX_LENGTH)
+  topic?: string | null;
 
   @IsOptional()
   @IsBoolean()

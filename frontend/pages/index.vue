@@ -43,40 +43,64 @@ const allPosts = computed<ArchivePost[]>(() => {
   )
 })
 
+const articleGroups = computed(() => indexArticleGroups(allPosts.value))
+const activeSeries = useState('blog-series-filter', () => '')
+const postIdsBySeries = computed(() => {
+  const idsBySeries = new Map<string, Set<number>>()
+  for (const post of allPosts.value) {
+    const series = articleGroups.value.positions.get(post.slug)?.find(position => position.kind === 'series')
+    if (!series) continue
+    if (!idsBySeries.has(series.title)) idsBySeries.set(series.title, new Set())
+    idsBySeries.get(series.title)!.add(post.id)
+  }
+  return idsBySeries
+})
+const seriesOptions = computed(() => [...postIdsBySeries.value.keys()])
+const seriesScope = computed(() => postIdsBySeries.value.get(activeSeries.value))
+const seriesPosts = computed(() => {
+  const scope = seriesScope.value
+  return scope ? allPosts.value.filter(post => scope.has(post.id)) : allPosts.value
+})
+
+watch(seriesOptions, (options) => {
+  if (activeSeries.value && !options.includes(activeSeries.value)) activeSeries.value = ''
+}, { immediate: true })
+
 // 搜索：走接口的语义搜索，能按「概念」找文章（如搜 cordis 会带出讲 Cordis 的几篇）
 const searchQuery = useState('blog-search', () => '')
 const searchResults = ref<ArchivePost[] | null>(null)
 const searching = ref(false)
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+let searchRequest = 0
 
-async function runSearch(q: string) {
-  searching.value = true
-  try {
-    searchResults.value = await postsApi.search(q)
-  } catch {
-    searchResults.value = []
-  } finally {
-    searching.value = false
-  }
-}
-
-watch(searchQuery, (raw) => {
-  const q = raw.trim()
+function queueSearch() {
   if (searchTimer) clearTimeout(searchTimer)
+  const request = ++searchRequest
+  const q = searchQuery.value.trim()
+  searchResults.value = null
   if (!q) {
-    searchResults.value = null
     searching.value = false
     return
   }
-  // 输入时防抖，避免每敲一个字就请求一次
+  const scope = seriesScope.value
   searching.value = true
-  searchTimer = setTimeout(() => runSearch(q), 250)
-})
+  searchTimer = setTimeout(async () => {
+    try {
+      const posts = await postsApi.search(q, 20, scope ? [...scope] : undefined)
+      if (request === searchRequest) searchResults.value = posts
+    } catch {
+      if (request === searchRequest) searchResults.value = []
+    } finally {
+      if (request === searchRequest) searching.value = false
+    }
+  }, 250)
+}
 
-// 从文章页返回时搜索词还在，需要补一次请求
-onMounted(() => {
-  const q = searchQuery.value.trim()
-  if (q && !searchResults.value) runSearch(q)
+watch([searchQuery, seriesScope], queueSearch)
+onMounted(queueSearch)
+onUnmounted(() => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchRequest += 1
 })
 
 // ── 标签筛选（多选，空选 = 全部）─────────────────────────────────────────
@@ -85,7 +109,7 @@ const activeTags = useState<string[]>('blog-tags', () => [])
 
 const allTags = computed(() => {
   const map = new Map<string, number>()
-  for (const post of allPosts.value) {
+  for (const post of seriesPosts.value) {
     for (const tag of post.tags ?? []) {
       map.set(tag.name, (map.get(tag.name) ?? 0) + 1)
     }
@@ -148,17 +172,19 @@ watch([allTags, activeTags], measureTagRows, { flush: 'post' })
 const filteredPosts = computed(() => {
   // 搜索结果不带 tags，按 id 从全量列表补齐，保证标签筛选对搜索结果同样生效
   const tagsById = new Map(allPosts.value.map(p => [p.id, p.tags ?? []]))
-  const source = (Array.isArray(searchResults.value) ? searchResults.value : allPosts.value).map(
-    p => ({ ...p, tags: p.tags?.length ? p.tags : tagsById.get(p.id) ?? [] }),
-  )
+  const scope = seriesScope.value
+  const source = searchResults.value
+    ? searchResults.value
+      .filter(post => !scope || scope.has(post.id))
+      .map(post => ({ ...post, tags: post.tags?.length ? post.tags : tagsById.get(post.id) ?? [] }))
+    : seriesPosts.value
   // 多选按「任一命中」取并集；一个都没选时不过滤，等同于全部
   if (activeTags.value.length === 0) return source
   return source.filter(p =>
-    p.tags.some(t => activeTags.value.includes(t.name)),
+    p.tags?.some(t => activeTags.value.includes(t.name)),
   )
 })
 
-const articleGroups = computed(() => indexArticleGroups(allPosts.value))
 const selectedGroup = shallowRef<ArticleGroup | null>(null)
 
 type ArchiveCard = { group: ArticleGroup; key: string }
@@ -194,7 +220,7 @@ const statusText = computed(() => {
   if (searching.value) return '搜索中…'
   if (searchQuery.value.trim()) return `${filteredPosts.value.length} 篇匹配`
   if (activeTags.value.length) return `${filteredPosts.value.length} 篇`
-  return `${allPosts.value.length} 篇文章`
+  return `${seriesPosts.value.length} 篇文章`
 })
 
 function formatDate(date: string) {
@@ -230,7 +256,7 @@ function formatDate(date: string) {
             <span>{{ statusText }}</span>
           </template>
         </div>
-        <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+        <div class="flex w-full max-w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
           <label class="archive-search flex w-full items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56">
             <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
               <path d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
@@ -243,6 +269,15 @@ function formatDate(date: string) {
               class="min-h-10 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-[var(--reader-ink)] placeholder:text-[var(--reader-muted)]"
             />
           </label>
+          <select
+            v-if="seriesOptions.length"
+            v-model="activeSeries"
+            aria-label="按系列筛选"
+            class="min-h-[2.625rem] w-full min-w-0 truncate rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-sm text-[var(--reader-ink)] sm:w-60"
+          >
+            <option value="">全部系列</option>
+            <option v-for="series in seriesOptions" :key="series" :value="series">{{ series }}</option>
+          </select>
           <fieldset class="flex min-w-0 flex-wrap gap-0.5 self-start rounded-md border border-[var(--reader-line)] p-0.5 sm:shrink-0">
             <legend class="sr-only">卡片分组方式</legend>
             <label v-for="option in groupingOptions" :key="option.value" class="grouping-option cursor-pointer">
@@ -270,7 +305,7 @@ function formatDate(date: string) {
             :aria-pressed="activeTags.length === 0"
             @click="activeTags = []"
           >
-            全部<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ allPosts.length }}</span>
+            全部<span class="ml-1 text-[11px] tabular-nums opacity-60">{{ seriesPosts.length }}</span>
           </button>
           <button
             v-for="(tag, index) in allTags"
@@ -319,7 +354,7 @@ function formatDate(date: string) {
                 <span v-if="card.group.parentSeries" class="card-placement flex items-baseline gap-2">
                   <span class="card-placement-label">所属系列</span>
                   <span class="min-w-0 flex-1 break-words font-medium">{{ card.group.parentSeries }}</span>
-                  <span v-if="card.group.topicPosition" class="shrink-0 text-xs tabular-nums">{{ card.group.topicPosition.index }}/{{ card.group.topicPosition.total }}</span>
+                  <span v-if="card.group.topicPosition" class="shrink-0 tabular-nums">{{ card.group.topicPosition.index }}/{{ card.group.topicPosition.total }}</span>
                 </span>
                 <span class="flex items-center justify-between gap-2 border-t border-[var(--reader-line)] pt-2 text-sm text-[var(--reader-muted)]">
                   {{ card.group.kind === 'topic' ? '查看专题目录' : '查看系列目录' }} <span aria-hidden="true">→</span>
@@ -368,7 +403,7 @@ function formatDate(date: string) {
                   <dt class="card-placement-label">{{ position.kind === 'series' ? '所属系列' : '所属专题' }}</dt>
                   <dd class="flex min-w-0 flex-1 items-baseline gap-2">
                     <span class="min-w-0 flex-1 break-words font-medium">{{ position.title }}</span>
-                    <span class="shrink-0 text-xs tabular-nums">{{ position.index }}/{{ position.total }}</span>
+                    <span class="shrink-0 tabular-nums">{{ position.index }}/{{ position.total }}</span>
                   </dd>
                 </div>
               </dl>
@@ -427,13 +462,12 @@ function formatDate(date: string) {
 
 .card-placement {
   color: var(--reader-muted);
-  font-size: 0.8125rem;
+  font-size: 0.6875rem;
   line-height: 1.45;
 }
 
 .card-placement-label {
   flex-shrink: 0;
-  font-size: 0.75rem;
 }
 
 .grouping-option span {

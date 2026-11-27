@@ -1,31 +1,4 @@
-/**
- * 标签词表的种子与兜底规则
- *
- * 正式词表不写死在这里：它存在于数据库的 Tag 表，可以随时用
- * POST /api/posts/rebuild-tags 让模型按当时的全部文章重新生成一套更精简的词表，
- * 然后逐篇重打标签。
- *
- * 下面的列表只在数据库里一个标签都没有时作为初始词表。
- */
-
-/** 初始词表（空库时使用） */
-export const DEFAULT_TAG_VOCABULARY = [
-  'deepseek',
-  'harness',
-  'cordis',
-  '插件机制',
-  '源码解析',
-  'agent工程',
-  '上下文管理',
-  '安全与权限',
-  '架构设计',
-  'javascript',
-  'typescript',
-  '浏览器',
-  '网络与编码',
-];
-
-/** 已知标签的简短说明，帮助模型把正文映射到宽标签 */
+/** 手动重建词表时，供模型区分已知标签。 */
 export const TAG_HINTS: Record<string, string> = {
   deepseek: 'DeepSeek / DSH 相关',
   harness: 'DeepSeek Harness 项目本身',

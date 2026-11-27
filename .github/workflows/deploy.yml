@@ -38,3 +38,4 @@ jobs:
           command_timeout: 20m
           script: |
             bash /www/wwwroot/blog-website/scripts/deploy.sh
+            bash /www/wwwroot/blog-website/scripts/sync-blog-mcp.sh

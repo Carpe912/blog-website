@@ -26,10 +26,10 @@ export const usePostsApi = () => ({
     apiFetch<any>('/posts?' + new URLSearchParams(params).toString()),
   get: (id: number) => apiFetch<any>(`/posts/${id}`),
   // 搜索接口返回 { data, meta }，这里直接摊平成数组交给页面
-  search: async (q: string, limit = 20) => {
-    const res = await apiFetch<any>(
-      `/posts/search?` + new URLSearchParams({ q, limit: String(limit) }).toString()
-    )
+  search: async (q: string, limit = 20, postIds?: number[]) => {
+    const params = new URLSearchParams({ q, limit: String(limit) })
+    if (postIds) params.set('postIds', postIds.join(','))
+    const res = await apiFetch<any>(`/posts/search?${params}`)
     return (Array.isArray(res) ? res : res?.data ?? []) as any[]
   },
   getBySlug: (slug: string) => apiFetch<any>(`/posts/slug/${slug}`),

@@ -42,10 +42,18 @@ export class PostsController {
 
   // 注意：必须放在 @Get(':id') 之前，否则 search 会被当成 id 解析
   @Get('search')
-  search(@Query('q') q: string, @Query('limit') limit?: string) {
+  search(
+    @Query('q') q: string,
+    @Query('limit') limit?: string,
+    @Query('postIds') postIds?: string,
+  ) {
+    const scope = postIds === undefined
+      ? undefined
+      : new Set(String(postIds).split(',', 1000).map(Number).filter((id) => Number.isSafeInteger(id) && id > 0));
     return this.postsService.searchByQuery(
       q ?? '',
       Math.min(Number(limit) || 20, 50),
+      scope,
     );
   }
 
@@ -88,7 +96,7 @@ export class PostsController {
     return this.postsService.rebuildTags(dryRun === 'true' || dryRun === '1');
   }
 
-  // 复审词表：有变化才全量重打，没变化直接返回（新建文章后会自动跑一次）
+  // 手动复审词表：有变化才全量重打。
   @Post('review-tags')
   reviewTags() {
     return this.postsService.reviewVocabulary();

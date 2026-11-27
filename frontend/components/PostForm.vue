@@ -16,12 +16,16 @@ const emit = defineEmits<{ submit: [data: any] }>()
 const form = reactive({
   title: '',
   content: '',
+  series: '',
+  topic: '',
   published: false,
 })
 
 if (props.initial) {
   form.title = props.initial.title ?? ''
   form.content = props.initial.content ?? ''
+  form.series = props.initial.series ?? ''
+  form.topic = props.initial.topic ?? ''
   form.published = props.initial.published ?? false
 }
 
@@ -49,10 +53,12 @@ const plainText = computed(() =>
 
 const canSubmit = computed(() => form.title.trim().length > 0 && plainText.value.length > 0)
 const isDirty = computed(() => {
-  if (!props.initial) return form.title.trim().length > 0 || plainText.value.length > 0
+  if (!props.initial) return Boolean(form.title.trim() || plainText.value || form.series.trim() || form.topic.trim())
   return (
     form.title !== (props.initial.title ?? '') ||
     form.content !== (props.initial.content ?? '') ||
+    form.series !== (props.initial.series ?? '') ||
+    form.topic !== (props.initial.topic ?? '') ||
     form.published !== (props.initial.published ?? false)
   )
 })
@@ -67,6 +73,8 @@ function save(published: boolean) {
   emit('submit', {
     title: form.title.trim(),
     content: form.content,
+    ...(form.series.trim() !== (props.initial?.series ?? '') ? { series: form.series.trim() || null } : {}),
+    ...(form.topic.trim() !== (props.initial?.topic ?? '') ? { topic: form.topic.trim() || null } : {}),
     published,
   })
 }
@@ -158,6 +166,17 @@ const router = useRouter()
         <span>链接与摘要将自动生成</span>
         <span class="text-slate-300 dark:text-ink-600">·</span>
         <span>支持 Markdown 快捷输入</span>
+      </div>
+
+      <div class="mt-5 grid gap-3 sm:grid-cols-2">
+        <label class="grid gap-1.5 text-xs font-medium text-slate-600 dark:text-ink-300">
+          所属系列（选填）
+          <input v-model="form.series" type="text" maxlength="160" class="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm text-slate-900 dark:border-ink-700 dark:text-ink-100" />
+        </label>
+        <label class="grid gap-1.5 text-xs font-medium text-slate-600 dark:text-ink-300">
+          所属主题（选填）
+          <input v-model="form.topic" type="text" maxlength="160" class="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm text-slate-900 dark:border-ink-700 dark:text-ink-100" />
+        </label>
       </div>
 
       <!-- 正文 -->

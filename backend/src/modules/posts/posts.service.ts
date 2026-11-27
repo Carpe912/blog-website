@@ -5,7 +5,8 @@ import { EmbeddingService, cosineSimilarity } from './embedding.service';
 import { CreatePostDto } from './dto/create-post.dto';
 import { UpdatePostDto } from './dto/update-post.dto';
 import { QueryPostDto } from './dto/query-post.dto';
-import { DEFAULT_TAG_VOCABULARY, TAG_RULES } from './tag-vocabulary';
+import { TAG_RULES } from './tag-vocabulary';
+import { inferLegacyCatalog, normalizeCatalogName, readCatalogHeader } from './article-catalog';
 
 /** 去掉 HTML 标签与实体，得到纯文本 */
 function plainText(html: string): string {
@@ -82,7 +83,7 @@ function normalizeQuery(raw: string): string {
     .trim();
 }
 
-/** 标签名归一化：去 #、去多余标点，英文统一小写 */
+/** 标签名归一化：去 #、多余空格和标点 */
 function normalizeTagName(raw: string): string {
   return String(raw ?? '')
     .replace(/^[#＃\s]+/, '')
@@ -91,6 +92,25 @@ function normalizeTagName(raw: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 24);
+}
+
+const GENERIC_AUTO_TAGS = new Set(['源码解析', '软件设计', '前端工程', 'agent工程']);
+
+function normalizeSpecificTags(raw: string[]): string[] {
+  const tags = new Map<string, string>();
+  for (const item of raw) {
+    const name = normalizeTagName(item);
+    const key = name.toLowerCase();
+    if (
+      name.length < 2 ||
+      TOPIC_STOP_WORDS.has(key) ||
+      GENERIC_AUTO_TAGS.has(key.replace(/\s+/g, '')) ||
+      tags.has(key)
+    ) continue;
+    tags.set(key, name);
+    if (tags.size === 3) break;
+  }
+  return [...tags.values()];
 }
 
 /** 由标签名推导 slug：英文转小写连字符，中文保留原字符 */
@@ -144,6 +164,8 @@ const POST_SELECT = {
   slug: true,
   excerpt: true,
   content: true,
+  series: true,
+  topic: true,
   published: true,
   publishedAt: true,
   createdAt: true,
@@ -157,9 +179,6 @@ const POST_LIST_SELECT = POST_SELECT;
 @Injectable()
 export class PostsService {
   private readonly logger = new Logger(PostsService.name);
-  /** 词表复审是否进行中（防止并发重打） */
-  private vocabularyReviewing = false;
-
   constructor(
     private readonly prisma: PrismaService,
     private readonly ai: AiService,
@@ -216,7 +235,7 @@ export class PostsService {
   //   c. 摘要里有这个词，且语义相似度 >= 0.45
   //   d. 语义相似度 >= 0.62（没写这个词，但确实在讲同一件事）
   // 只在正文里擦边提到的、语义分数不够的，一律不返回。
-  async searchByQuery(rawQuery: string, limit = 12) {
+  async searchByQuery(rawQuery: string, limit = 12, postIds?: ReadonlySet<number>) {
     const query = normalizeQuery(rawQuery);
     if (!query) return { data: [], meta: { total: 0, query: '', semantic: false } };
 
@@ -234,7 +253,8 @@ export class PostsService {
     }
     const kwIsGeneric = (kwDf.get(q) ?? 0) / total > 0.25;
 
-    const matches = corpus.map((p) => {
+    const candidates = postIds ? corpus.filter((post) => postIds.has(post.id)) : corpus;
+    const matches = candidates.map((p) => {
       const inTitle = String(p.title ?? '').toLowerCase().includes(q);
       const inExcerpt = String(p.excerpt ?? '').toLowerCase().includes(q);
       const inBody = plainText(p.content).toLowerCase().includes(q);
@@ -248,8 +268,8 @@ export class PostsService {
     // 语义分：向量不可用时全部为 0，只靠字面/关键词命中
     let vectors: (number[] | null)[] = [];
     let queryVec: number[] | null = null;
-    if (this.embedding.enabled) {
-      const texts = corpus.map(
+    if (this.embedding.enabled && candidates.length > 0) {
+      const texts = candidates.map(
         (p) => `${p.title}\n${p.excerpt ?? ''}\n${plainText(p.content).slice(0, 3000)}`,
       );
       const all = await this.embedding.embedMany([query, ...texts]);
@@ -300,6 +320,9 @@ export class PostsService {
   async create(dto: CreatePostDto) {
     const slug = await this.resolveSlug(dto.slug);
     const published = dto.published ?? false;
+    const catalog = dto.series === undefined && dto.topic === undefined
+      ? inferLegacyCatalog(slug, readCatalogHeader(dto.content))
+      : { series: normalizeCatalogName(dto.series), topic: normalizeCatalogName(dto.topic) };
 
     // 摘要与标签都靠模型生成，并行跑，避免串行等待
     const [excerpt, tagNames] = await Promise.all([
@@ -313,6 +336,7 @@ export class PostsService {
         slug,
         content: dto.content,
         excerpt,
+        ...catalog,
         published,
         publishedAt: published ? new Date() : null,
       },
@@ -333,16 +357,13 @@ export class PostsService {
       this._asyncRefreshKeywords(created.id, created.title, dto.content);
     }
 
-    // 每新增一篇文章，后台复审一次词表：能合并就合并并全量重打，没变化不动
-    this._asyncReviewVocabulary();
-
     this.invalidateCorpusCache();
     return this.findOne(created.id);
   }
 
   async update(id: number, dto: UpdatePostDto) {
     const current: any = await this.findOne(id);
-    const { published, excerpt, slug, ...postData } = dto;
+    const { published, excerpt, slug, series, topic, ...postData } = dto;
 
     if (slug && slug !== current.slug) {
       const conflict = await this.prisma.post.findFirst({
@@ -378,6 +399,8 @@ export class PostsService {
       data: {
         ...postData,
         ...(slug ? { slug } : {}),
+        ...(series !== undefined ? { series: normalizeCatalogName(series) } : {}),
+        ...(topic !== undefined ? { topic: normalizeCatalogName(topic) } : {}),
         excerpt: nextExcerpt,
         ...(published !== undefined ? { published } : {}),
         ...(publishedAt !== undefined ? { publishedAt } : {}),
@@ -401,8 +424,9 @@ export class PostsService {
       if (raw) this._asyncRefreshKeywords(id, raw.title, raw.content);
     }
 
-    // 标签：标题/正文变化，或老文章还没有标签时重新生成（草稿也刷新）
+    // 标签：首次发布、标题/正文变化，或文章还没有标签时重新生成。
     const tagsStale =
+      (published === true && !current.published) ||
       (postData.title != null && postData.title !== current.title) ||
       contentChanged ||
       (current.tags?.length ?? 0) === 0;
@@ -483,11 +507,7 @@ export class PostsService {
 
   // ── 标签体系：复审 / 重建 / 全量重打 ─────────────────────────────────────
   //
-  // 每新建一篇文章都会在后台复审一次词表：
-  //   - 模型判断现有标签是否仍然够用
-  //   - 有变化（合并 / 更名 / 新主题）→ 全量重打所有文章，删掉旧标签
-  //   - 没变化 → 什么都不做
-  // 管理接口 rebuild-tags 可手动触发同一套流程。
+  // 仅由管理接口显式触发，与日常的单篇标签生成分开。
 
   /** 复审词表；返回是否发生变化 */
   async reviewVocabulary() {
@@ -513,17 +533,6 @@ export class PostsService {
     const stats = await this.retagAll(vocabulary, posts);
     this.logger.log(`标签体系已更新：${previous.join('、')} → ${vocabulary.join('、')}`);
     return { changed: true, previous, vocabulary, ...stats };
-  }
-
-  /** 后台复审：同一时间只跑一个，避免并发重打 */
-  private _asyncReviewVocabulary(): void {
-    if (this.vocabularyReviewing) return;
-    this.vocabularyReviewing = true;
-    this.reviewVocabulary()
-      .catch((err) => this.logger.error('标签体系复审失败', err))
-      .finally(() => {
-        this.vocabularyReviewing = false;
-      });
   }
 
   // ── 重建标签体系（管理接口，dryRun 只预览词表）──────────────────────────
@@ -578,7 +587,7 @@ export class PostsService {
     });
   }
 
-  /** 按给定词表重打全部文章，并删除词表外的标签 */
+  /** 按给定词表重打全部文章，清理已无关联的旧标签。 */
   private async retagAll(
     vocabulary: string[],
     posts: { id: number; title: string; content: string }[],
@@ -609,10 +618,9 @@ export class PostsService {
       }
     }
 
-    // 词表即标签集合：词表外的标签一律删除
-    // （并发新建的文章可能带着旧标签进来，这里一并清掉，下次复审会补）
+    // 已重打的旧标签可以清理；仍有关联的标签可能属于失败或并发新增的文章。
     const pruned = await this.prisma.tag.deleteMany({
-      where: { name: { notIn: vocabulary } },
+      where: { name: { notIn: vocabulary }, posts: { none: {} } },
     });
 
     this.invalidateCorpusCache();
@@ -798,6 +806,8 @@ export class PostsService {
       id: true,
       title: true,
       slug: true,
+      series: true,
+      topic: true,
       excerpt: true,
       content: true,
       createdAt: true,
@@ -883,34 +893,16 @@ export class PostsService {
 
   // ── 私有：标签生成与落库 ─────────────────────────────────────────────────
   //
-  // 标签完全由正文推导，接口不接收标签参数：
-  //   1. 词表取自数据库现存的标签（按使用次数排序）；空库时用默认词表
-  //   2. 模型只能从词表里挑 2~3 个，不再自造标签
-  //   3. 模型不可用时按关键词规则兜底，结果同样压在词表内
-  //   4. 需要合并/精简标签时，走 rebuildTags 重建词表并逐篇重打
+  // 每篇独立生成；写入时由 ensureTag 复用同名标签。
   private async proposeTags(title: string, content: string): Promise<string[]> {
-    const vocabulary = await this.loadVocabulary();
-    const raw = await this.ai.generateTags(title, content, vocabulary);
-    const picked = this.canonicalizeTags(raw, vocabulary);
-    if (picked.length > 0) return picked;
+    const generated = normalizeSpecificTags(await this.ai.generateTags(title, content));
+    if (generated.length > 0) return generated;
 
-    // 模型不可用或输出不在词表内：用关键词规则兜底，保证标签不跑偏
-    return this.fallbackTags(title, content, vocabulary);
-  }
-
-  /** 当前词表：数据库里的标签（含暂时没用到的），空库时用默认词表 */
-  private async loadVocabulary(): Promise<string[]> {
-    try {
-      const rows = await this.prisma.tag.findMany({
-        select: { name: true },
-        orderBy: { posts: { _count: 'desc' } },
-        take: 120,
-      });
-      const names = rows.map((r) => r.name);
-      return names.length > 0 ? names : [...DEFAULT_TAG_VOCABULARY];
-    } catch {
-      return [...DEFAULT_TAG_VOCABULARY];
-    }
+    // 模型不可用时只从标题主语取词，避免正文偶然提到的泛词成为标签。
+    const subject = title.split(/[：:｜|？?]/, 1)[0]
+      .replace(/^(?:深入理解|深入解析)\s*/, '')
+      .replace(/\s*(?:源码深度解析|深度解析|全解析|详解)$/, '');
+    return normalizeSpecificTags(subject.split(/\s+(?:与|和|vs\.?)\s+|[、，,]/i));
   }
 
   /** 把模型输出对齐到词表原词（大小写不敏感），去重并限制 3 个 */

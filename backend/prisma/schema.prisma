@@ -26,6 +26,8 @@ model Post {
   excerpt     String?
   content     String    @db.Text
   cover       String?
+  series      String?   @db.VarChar(160)
+  topic       String?   @db.VarChar(160)
   aiKeywords  String[]  @default([])
   published   Boolean   @default(false)
   publishedAt DateTime?

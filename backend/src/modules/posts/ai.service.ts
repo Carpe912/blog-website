@@ -102,37 +102,32 @@ export class AiService {
   }
 
   /**
-   * 从给定词表中为文章挑选标签
-   * @param vocabulary 受控词表（数据库里现存的标签，或刚重建出来的词表）
-   * @returns 2~3 个标签，失败时返回空数组
+   * 生成文章的具体标签。只有显式重建词表时才传入固定选项。
+   * @returns 至多 3 个标签，失败时返回空数组
    */
   async generateTags(
     title: string,
     content: string,
-    vocabulary: string[],
+    vocabulary?: string[],
   ): Promise<string[]> {
     const plain = this.toPlainText(content).slice(0, 3000);
-    if (!plain || vocabulary.length === 0) return [];
+    if (!plain || vocabulary?.length === 0) return [];
 
-    const list = vocabulary
-      .map((name) => `- ${name}${TAG_HINTS[name] ? `：${TAG_HINTS[name]}` : ''}`)
-      .join('\n');
+    const instructions = vocabulary
+      ? `从下列固定词表选 2 到 3 个最贴合文章主线的标签，保留原词：
+${vocabulary.map((name) => `- ${name}${TAG_HINTS[name] ? `：${TAG_HINTS[name]}` : ''}`).join('\n')}`
+      : `根据本篇文章的主线直接生成 1 到 3 个具体的技术标签，精准度优先。
+- 优先使用读者会搜索的框架、协议、算法或具体机制，如「PostgreSQL 索引」「SQLite WAL」「DMN 决策表」
+- 避免「源码解析」「软件设计」「前端工程」「Agent 工程」等泛类词，也不选正文只顺带提到的概念
+- 采用通用技术术语，同一概念只选一个名称。一个标签足够时就只给一个
+- 每个标签最多 24 个字符，不加 # 或解释，不用文章标题或长句当标签`;
 
-    const prompt = `请为下面这篇文章，从「固定标签」中选 2 到 3 个最贴切的标签。
+    const prompt = `${instructions}
 
-固定标签（只能从中选，不得新增、不得改写）：
-${list}
-
-要求：
-- 只输出固定标签里的原词
-- 选 2 到 3 个，按相关度从高到低
-- 概括全文主线，不要因为文中顺带提到就选
 - 直接返回 JSON 数组，不要任何解释或 markdown
 
 文章标题：${title}
-文章内容：${plain}
-
-返回格式示例：["deepseek", "harness"]`;
+文章内容：${plain}`;
 
     try {
       const text = await this.chat(prompt, 120, 0.3);

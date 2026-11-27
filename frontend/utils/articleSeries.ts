@@ -86,6 +86,7 @@ const aiEngineeringTopics = new Set([
   '编译原理与 Coding Agent',
   '业务流程建模与工作流',
   'SQL 与数据库应用工程',
+  '服务部署与分布式工程',
 ])
 
 // 两套历史 JavaScript 篇目使用过同一个专题名，正式目录的前七篇以 slug 区分。

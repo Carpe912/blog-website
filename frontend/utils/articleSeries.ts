@@ -17,10 +17,21 @@ interface Chapter {
   total?: number
 }
 
-export interface ArticleSeries {
+export interface ArticlePosition {
+  kind: 'topic' | 'series'
+  title: string
+  index: number
+  total: number
+}
+
+export interface ArticleGroup {
+  kind: 'topic' | 'series'
+  key: string
   title: string
   description?: string
   count: number
+  topicCount?: number
+  topicPosition?: { index: number; total: number }
   sections: { topic: string; chapters: Chapter[] }[]
 }
 
@@ -122,7 +133,7 @@ function getPlacement(post: ArchivePost) {
   if (harnessArticles.has(post.slug)) return { title: HARNESS, chapter }
 }
 
-export function indexArticleSeries(posts: ArchivePost[]) {
+export function indexArticleGroups(posts: ArchivePost[]) {
   const groups = new Map<string, Chapter[]>()
   for (const post of posts) {
     const placement = getPlacement(post)
@@ -132,10 +143,10 @@ export function indexArticleSeries(posts: ArchivePost[]) {
     groups.get(title)!.push(chapter)
   }
 
-  const bySlug = new Map<string, ArticleSeries>()
+  const bySeries = new Map<string, ArticleGroup>()
+  const byTopic = new Map<string, ArticleGroup>()
+  const positions = new Map<string, ArticlePosition[]>()
   for (const [title, chapters] of groups) {
-    if (chapters.length < 2) continue
-
     chapters.sort((a, b) =>
       (a.topicOrder ?? 0) - (b.topicOrder ?? 0)
       // 前端系列的改版篇目重新编号，在同专题内接在原目录之后。
@@ -150,13 +161,46 @@ export function indexArticleSeries(posts: ArchivePost[]) {
       if (!chaptersByTopic.has(chapter.topic)) chaptersByTopic.set(chapter.topic, [])
       chaptersByTopic.get(chapter.topic)!.push(chapter)
     }
-    const series: ArticleSeries = {
+    const sections = Array.from(chaptersByTopic, ([topic, chapters]) => ({ topic, chapters }))
+    const namedTopics = sections.filter(section => section.topic)
+    const series: ArticleGroup = {
+      kind: 'series',
+      key: `series:${title}`,
       title,
       description: descriptions.get(title),
       count: chapters.length,
-      sections: Array.from(chaptersByTopic, ([topic, chapters]) => ({ topic, chapters })),
+      topicCount: namedTopics.length,
+      sections,
     }
-    for (const { post } of chapters) bySlug.set(post.slug, series)
+
+    // 序号跟随完整目录的顺序，搜索或标签筛选只改变可见卡片。
+    let seriesIndex = 0
+    for (const section of sections) {
+      for (const [index, { post }] of section.chapters.entries()) {
+        const articlePositions: ArticlePosition[] = [
+          { kind: 'series', title, index: ++seriesIndex, total: chapters.length },
+        ]
+        if (section.topic) {
+          articlePositions.push({ kind: 'topic', title: section.topic, index: index + 1, total: section.chapters.length })
+        }
+        positions.set(post.slug, articlePositions)
+        if (series.count > 1) bySeries.set(post.slug, series)
+      }
+    }
+
+    for (const [index, section] of namedTopics.entries()) {
+      if (section.chapters.length < 2) continue
+      const topic: ArticleGroup = {
+        kind: 'topic',
+        key: `topic:${JSON.stringify([title, section.topic])}`,
+        title: section.topic,
+        description: title,
+        count: section.chapters.length,
+        topicPosition: { index: index + 1, total: namedTopics.length },
+        sections: [{ topic: '', chapters: section.chapters }],
+      }
+      for (const { post } of section.chapters) byTopic.set(post.slug, topic)
+    }
   }
-  return bySlug
+  return { series: bySeries, topic: byTopic, positions }
 }

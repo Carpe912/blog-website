@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import type { ArticleSeries } from '~/utils/articleSeries'
+import type { ArticleGroup } from '~/utils/articleSeries'
 
-defineProps<{ series: ArticleSeries }>()
+const props = defineProps<{ group: ArticleGroup }>()
+const groupLabel = computed(() => props.group.kind === 'topic' ? '专题' : '系列')
 const emit = defineEmits<{ close: [] }>()
 const dialog = ref<HTMLDialogElement | null>(null)
 
@@ -14,22 +15,21 @@ function closeOnBackdrop(event: MouseEvent) {
 
 <template>
   <dialog
-    id="article-series-dialog"
     ref="dialog"
-    aria-labelledby="article-series-title"
-    aria-describedby="article-series-count"
-    class="series-dialog overflow-hidden rounded-2xl border border-[var(--reader-line)] bg-[var(--reader-paper)] p-0 text-[var(--reader-ink)] shadow-2xl open:flex open:flex-col"
+    aria-labelledby="article-group-title"
+    aria-describedby="article-group-count"
+    class="article-group-dialog overflow-hidden rounded-2xl border border-[var(--reader-line)] bg-[var(--reader-paper)] p-0 text-[var(--reader-ink)] shadow-2xl open:flex open:flex-col"
     @close="emit('close')"
     @click="closeOnBackdrop"
   >
     <header class="flex shrink-0 items-start justify-between gap-3 border-b border-[var(--reader-line)] bg-[var(--reader-surface)] p-4 sm:p-5">
       <div class="min-w-0">
-        <p id="article-series-count" class="mb-1 text-sm font-medium tabular-nums text-[var(--reader-accent)]">{{ series.count }} 篇文章</p>
-        <h2 id="article-series-title" class="reader-display text-xl font-bold leading-snug sm:text-2xl">{{ series.title }}</h2>
+        <p id="article-group-count" class="mb-1 text-sm font-medium tabular-nums text-[var(--reader-accent)]">{{ group.count }} 篇文章</p>
+        <h2 id="article-group-title" class="reader-display text-xl font-bold leading-snug sm:text-2xl">{{ group.title }}</h2>
       </div>
       <button
         type="button"
-        aria-label="关闭系列目录"
+        :aria-label="`关闭${groupLabel}目录`"
         autofocus
         class="grid h-11 w-11 shrink-0 place-items-center rounded-md border border-[var(--reader-line)] bg-[var(--reader-paper)] text-2xl leading-none transition-colors hover:text-[var(--reader-accent)]"
         @click="dialog?.close()"
@@ -37,8 +37,8 @@ function closeOnBackdrop(event: MouseEvent) {
         <span aria-hidden="true">×</span>
       </button>
     </header>
-    <div class="min-h-0 overflow-y-auto overscroll-contain px-4 pb-3 sm:px-5" aria-label="系列文章目录" role="region">
-      <section v-for="section in series.sections" :key="section.topic" class="mt-3">
+    <div class="min-h-0 overflow-y-auto overscroll-contain px-4 pb-3 sm:px-5" :aria-label="`${groupLabel}文章目录`" role="region">
+      <section v-for="section in group.sections" :key="section.topic" class="mt-3">
         <h3 v-if="section.topic" class="mb-1 text-xs font-semibold tracking-wide text-[var(--reader-muted)]">{{ section.topic }}</h3>
         <ul class="divide-y divide-[var(--reader-line)]">
           <li v-for="chapter in section.chapters" :key="chapter.post.id">
@@ -61,12 +61,12 @@ function closeOnBackdrop(event: MouseEvent) {
 </template>
 
 <style scoped>
-.series-dialog {
+.article-group-dialog {
   width: min(43.875rem, calc(100% - 2rem));
   max-height: min(40.5rem, calc(100dvh - 2rem));
 }
 
-.series-dialog::backdrop {
+.article-group-dialog::backdrop {
   background: rgb(27 21 16 / 61%);
 }
 </style>

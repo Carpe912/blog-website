@@ -1,15 +1,27 @@
 <script setup lang="ts">
-import { indexArticleSeries, type ArchivePost, type ArticleSeries } from '~/utils/articleSeries'
+import { indexArticleGroups, type ArchivePost, type ArticleGroup, type ArticlePosition } from '~/utils/articleSeries'
 
 definePageMeta({ layout: 'default' })
 
 const config = useRuntimeConfig()
 const postsApi = usePostsApi()
-const archiveView = useCookie<'list' | 'cards'>('blog-archive-view', {
+
+const groupingOptions = [
+  { value: 'article', label: '逐篇显示' },
+  { value: 'topic', label: '按专题分组' },
+  { value: 'series', label: '按系列分组' },
+] as const
+type GroupingMode = typeof groupingOptions[number]['value']
+const groupingPreference = useCookie<GroupingMode>('blog-archive-grouping', {
   maxAge: 60 * 60 * 24 * 365,
   sameSite: 'lax',
 })
-const showCards = computed(() => archiveView.value !== 'list')
+const grouping = computed<GroupingMode>({
+  get: () => groupingPreference.value === 'topic' || groupingPreference.value === 'series'
+    ? groupingPreference.value
+    : 'article',
+  set: value => { groupingPreference.value = value },
+})
 
 useSeoMeta({
   title: config.public.siteName,
@@ -146,20 +158,23 @@ const filteredPosts = computed(() => {
   )
 })
 
-const seriesBySlug = computed(() => indexArticleSeries(allPosts.value))
-const selectedSeries = shallowRef<ArticleSeries | null>(null)
+const articleGroups = computed(() => indexArticleGroups(allPosts.value))
+const selectedGroup = shallowRef<ArticleGroup | null>(null)
 
-type ArchiveCard = { series: ArticleSeries; key: string } | { post: ArchivePost; key: string }
+type ArchiveCard = { group: ArticleGroup; key: string }
+  | { post: ArchivePost; key: string; positions: ArticlePosition[] }
 const archiveCards = computed(() => {
   const cards: ArchiveCard[] = []
-  const seen = new Set<ArticleSeries>()
+  const groups = articleGroups.value
+  const groupsBySlug = grouping.value === 'article' ? undefined : groups[grouping.value]
+  const seen = new Set<ArticleGroup>()
   for (const post of filteredPosts.value) {
-    const series = seriesBySlug.value.get(post.slug)
-    if (!series) {
-      cards.push({ post, key: post.slug })
-    } else if (!seen.has(series)) {
-      cards.push({ series, key: `series:${series.title}` })
-      seen.add(series)
+    const group = groupsBySlug?.get(post.slug)
+    if (!group) {
+      cards.push({ post, key: post.slug, positions: groups.positions.get(post.slug) ?? [] })
+    } else if (!seen.has(group)) {
+      cards.push({ group, key: group.key })
+      seen.add(group)
     }
   }
   return cards
@@ -192,13 +207,13 @@ function formatDate(date: string) {
 </script>
 
 <template>
-  <div class="pb-20 pt-8 sm:pt-12" :class="showCards ? 'archive-wide' : 'reader-column'">
+  <div class="archive-wide pb-20 pt-8 sm:pt-12">
     <h1 class="sr-only">文章</h1>
 
-    <section aria-label="文章列表">
+    <section aria-label="文章">
       <div class="flex flex-wrap items-center justify-between gap-3 border-b border-[var(--reader-line)] pb-4">
         <div role="status" class="flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm tabular-nums text-[var(--reader-muted)]">
-          <template v-if="error">文章列表</template>
+          <template v-if="error">文章</template>
           <template v-else>
             <button
               v-for="name in activeTags"
@@ -215,8 +230,8 @@ function formatDate(date: string) {
             <span>{{ statusText }}</span>
           </template>
         </div>
-        <div class="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-          <label class="archive-search flex min-w-0 flex-1 basis-36 items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56 sm:flex-none">
+        <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <label class="archive-search flex w-full items-center gap-2 rounded-md border border-[var(--reader-line)] bg-[var(--reader-surface)] px-3 text-[var(--reader-muted)] sm:w-56">
             <svg aria-hidden="true" class="h-4 w-4 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
               <path d="M21 21l-4.35-4.35M17 11a6 6 0 11-12 0 6 6 0 0112 0z" />
             </svg>
@@ -228,10 +243,13 @@ function formatDate(date: string) {
               class="min-h-10 min-w-0 flex-1 rounded-sm bg-transparent text-sm text-[var(--reader-ink)] placeholder:text-[var(--reader-muted)]"
             />
           </label>
-          <div role="group" aria-label="文章视图" class="archive-views flex shrink-0 gap-0.5 rounded-md border border-[var(--reader-line)] p-0.5 text-sm">
-            <button type="button" :aria-pressed="!showCards" @click="archiveView = 'list'">列表</button>
-            <button type="button" :aria-pressed="showCards" @click="archiveView = 'cards'">卡片</button>
-          </div>
+          <fieldset class="flex min-w-0 flex-wrap gap-0.5 self-start rounded-md border border-[var(--reader-line)] p-0.5 sm:shrink-0">
+            <legend class="sr-only">卡片分组方式</legend>
+            <label v-for="option in groupingOptions" :key="option.value" class="grouping-option cursor-pointer">
+              <input v-model="grouping" type="radio" name="archive-grouping" :value="option.value" class="sr-only" />
+              <span class="flex min-h-9 items-center rounded px-2.5 text-sm sm:px-3">{{ option.label }}</span>
+            </label>
+          </fieldset>
         </div>
       </div>
 
@@ -282,76 +300,25 @@ function formatDate(date: string) {
         </div>
       </div>
 
-      <ul v-if="filteredPosts.length && !showCards" class="divide-y divide-[var(--reader-line)] border-b border-[var(--reader-line)]">
-        <li v-for="post in filteredPosts" :key="post.id" class="group relative py-6 sm:py-8">
-          <div class="grid grid-cols-[minmax(0,1fr)_1.25rem] items-start gap-x-4 gap-y-2 sm:grid-cols-[6rem_minmax(0,1fr)_1.25rem] sm:gap-x-6">
-            <time
-              :datetime="post.createdAt"
-              class="col-span-2 pt-0.5 text-[13px] tabular-nums text-[var(--reader-muted)] sm:col-span-1 sm:pt-1.5"
-            >
-              {{ formatDate(post.createdAt) }}
-            </time>
-            <div class="min-w-0">
-              <h2 class="reader-display text-xl font-bold leading-snug sm:text-2xl">
-                <!-- 链接用伪元素铺满整行：标题、摘要点哪都能进文章 -->
-                <NuxtLink
-                  :to="`/blog/${post.slug}`"
-                  class="transition-colors group-hover:text-[var(--reader-accent)] after:absolute after:inset-0 after:content-['']"
-                >
-                  {{ post.title }}
-                </NuxtLink>
-              </h2>
-
-              <!-- 标签紧跟标题，z-10 保证能盖住上面的整行链接 -->
-              <div
-                v-if="post.tags?.length"
-                class="tag-text relative z-10 mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-[12px] leading-5"
-                aria-label="文章标签"
-              >
-                <button
-                  v-for="tag in post.tags"
-                  :key="tag.id"
-                  type="button"
-                  class="transition-colors"
-                  :class="activeTags.includes(tag.name)
-                    ? 'text-[var(--reader-accent)]'
-                    : 'text-[var(--reader-muted)] hover:text-[var(--reader-accent)]'"
-                  :aria-pressed="activeTags.includes(tag.name)"
-                  @click="toggleTag(tag.name)"
-                >
-                  #{{ tag.name }}
-                </button>
-              </div>
-
-              <p
-                v-if="post.excerpt"
-                :title="post.excerpt"
-                class="reader-display mt-2 line-clamp-2 break-words text-[15px] leading-relaxed text-[var(--reader-muted)]"
-              >
-                {{ post.excerpt }}
-              </p>
-              <p class="mt-3 text-xs tabular-nums text-[var(--reader-muted)]">{{ post.readingTime ?? 1 }} 分钟阅读</p>
-            </div>
-            <span aria-hidden="true" class="pt-1 text-right text-[var(--reader-accent)]">↗</span>
-          </div>
-        </li>
-      </ul>
-
-      <ul v-else-if="archiveCards.length" class="archive-cards mt-5 grid gap-4 sm:gap-5">
+      <ul v-if="archiveCards.length" class="archive-cards mt-5 grid gap-4 sm:gap-5">
         <template v-for="card in archiveCards" :key="card.key">
-          <li v-if="'series' in card" class="archive-series relative isolate grid min-w-0">
+          <li v-if="'group' in card" class="archive-stack relative isolate grid min-w-0">
             <button
               type="button"
               aria-haspopup="dialog"
-              class="archive-series-front flex min-h-48 min-w-0 flex-col rounded-xl border p-5 text-left transition-colors"
-              @click="selectedSeries = card.series"
+              class="archive-stack-front flex min-h-48 min-w-0 flex-col rounded-xl border p-5 text-left transition-colors"
+              @click="selectedGroup = card.group"
             >
-              <span class="text-xs font-medium tabular-nums text-[var(--reader-accent)]">系列 · {{ card.series.count }} 篇</span>
-              <span class="reader-display mt-3 line-clamp-3 text-xl font-bold leading-snug">{{ card.series.title }}</span>
-              <span v-if="card.series.description" class="reader-display mt-2 line-clamp-2 text-sm leading-relaxed text-[var(--reader-muted)]">{{ card.series.description }}</span>
+              <span class="text-xs font-medium tabular-nums text-[var(--reader-accent)]">
+                <template v-if="card.group.topicPosition">专题 {{ card.group.topicPosition.index }}/{{ card.group.topicPosition.total }}</template>
+                <template v-else>系列</template>
+                · {{ card.group.count }} 篇<template v-if="card.group.topicCount"> · {{ card.group.topicCount }} 个专题</template>
+              </span>
+              <span class="reader-display mt-3 line-clamp-3 text-xl font-bold leading-snug">{{ card.group.title }}</span>
+              <span v-if="card.group.description" class="reader-display mt-2 line-clamp-2 text-sm leading-relaxed text-[var(--reader-muted)]">{{ card.group.description }}</span>
               <span class="mt-auto pt-3">
                 <span class="flex items-center justify-between gap-2 border-t border-[var(--reader-line)] pt-2 text-sm font-medium text-[var(--reader-accent)]">
-                  查看系列目录 <span aria-hidden="true">→</span>
+                  {{ card.group.kind === 'topic' ? '查看专题目录' : '查看系列目录' }} <span aria-hidden="true">→</span>
                 </span>
               </span>
             </button>
@@ -376,20 +343,31 @@ function formatDate(date: string) {
             <p v-if="card.post.excerpt" class="reader-display mt-2 line-clamp-3 text-sm leading-relaxed text-[var(--reader-muted)]">
               {{ card.post.excerpt }}
             </p>
-            <div v-if="card.post.tags?.length" role="group" aria-label="文章标签" class="tag-text mt-auto flex flex-wrap gap-1.5 pt-4 text-xs">
-              <button
-                v-for="tag in card.post.tags"
-                :key="tag.id"
-                type="button"
-                class="relative z-10 max-w-full truncate rounded border bg-[var(--reader-paper)] px-2 py-0.5 transition-colors hover:border-[var(--reader-accent)] hover:text-[var(--reader-accent)]"
-                :class="activeTags.includes(tag.name)
-                  ? 'border-[var(--reader-accent)] text-[var(--reader-accent)]'
-                  : 'border-[var(--reader-line)] text-[var(--reader-muted)]'"
-                :aria-pressed="activeTags.includes(tag.name)"
-                @click="toggleTag(tag.name)"
-              >
-                #{{ tag.name }}
-              </button>
+            <div v-if="card.positions.length || card.post.tags?.length" class="mt-auto space-y-2 pt-4">
+              <dl v-if="card.positions.length" class="space-y-1 text-xs text-[var(--reader-muted)]">
+                <div v-for="position in card.positions" :key="position.kind" class="flex items-baseline gap-2">
+                  <dt class="shrink-0 text-[var(--reader-accent)]">{{ position.kind === 'series' ? '系列' : '专题' }}</dt>
+                  <dd class="flex min-w-0 flex-1 items-baseline gap-2">
+                    <span class="min-w-0 flex-1 break-words">{{ position.title }}</span>
+                    <span class="shrink-0 tabular-nums">{{ position.index }}/{{ position.total }}</span>
+                  </dd>
+                </div>
+              </dl>
+              <div v-if="card.post.tags?.length" role="group" aria-label="文章标签" class="tag-text flex flex-wrap gap-1.5 text-xs">
+                <button
+                  v-for="tag in card.post.tags"
+                  :key="tag.id"
+                  type="button"
+                  class="relative z-10 max-w-full truncate rounded border bg-[var(--reader-paper)] px-2 py-0.5 transition-colors hover:border-[var(--reader-accent)] hover:text-[var(--reader-accent)]"
+                  :class="activeTags.includes(tag.name)
+                    ? 'border-[var(--reader-accent)] text-[var(--reader-accent)]'
+                    : 'border-[var(--reader-line)] text-[var(--reader-muted)]'"
+                  :aria-pressed="activeTags.includes(tag.name)"
+                  @click="toggleTag(tag.name)"
+                >
+                  #{{ tag.name }}
+                </button>
+              </div>
             </div>
           </li>
         </template>
@@ -399,7 +377,7 @@ function formatDate(date: string) {
         {{ error ? '文章暂时无法加载' : searchQuery.trim() ? '没有找到匹配的文章' : activeTags.length ? '所选标签下暂无文章' : '暂无文章' }}
       </p>
     </section>
-    <ArticleSeriesDialog v-if="selectedSeries" :series="selectedSeries" @close="selectedSeries = null" />
+    <ArticleGroupDialog v-if="selectedGroup" :group="selectedGroup" @close="selectedGroup = null" />
   </div>
 </template>
 
@@ -413,56 +391,58 @@ function formatDate(date: string) {
   grid-auto-rows: 1fr;
 }
 
-.archive-series {
-  --series-border: color-mix(in srgb, var(--reader-line) 74%, var(--reader-accent));
-  --series-page: color-mix(in srgb, var(--reader-surface) 94%, var(--reader-accent));
+.archive-stack {
+  --stack-border: color-mix(in srgb, var(--reader-line) 74%, var(--reader-accent));
+  --stack-page: color-mix(in srgb, var(--reader-surface) 94%, var(--reader-accent));
 }
 
-.archive-series::before,
-.archive-series::after {
+.archive-stack::before,
+.archive-stack::after {
   position: absolute;
   inset: 0;
   z-index: -1;
-  border: 1px solid var(--series-border);
+  border: 1px solid var(--stack-border);
   border-radius: 0.75rem;
   pointer-events: none;
   content: '';
 }
 
-.archive-series::before {
+.archive-stack::before {
   transform: translate(7px, 10px);
-  background: color-mix(in srgb, var(--series-page) 84%, var(--reader-accent));
+  background: color-mix(in srgb, var(--stack-page) 84%, var(--reader-accent));
 }
 
-.archive-series::after {
+.archive-stack::after {
   transform: translate(3.5px, 5px);
-  background: color-mix(in srgb, var(--series-page) 92%, var(--reader-accent));
+  background: color-mix(in srgb, var(--stack-page) 92%, var(--reader-accent));
 }
 
-.archive-series-front {
-  border-color: var(--series-border);
-  background: var(--series-page);
+.archive-stack-front {
+  border-color: var(--stack-border);
+  background: var(--stack-page);
 }
 
-.archive-series-front:is(:hover, :focus-visible) {
+.archive-stack-front:is(:hover, :focus-visible) {
   border-color: var(--reader-accent);
 }
 
-.archive-views button {
-  min-height: 2.25rem;
-  padding-inline: 0.75rem;
-  border-radius: 0.25rem;
+.grouping-option span {
   color: var(--reader-muted);
 }
 
-.archive-views button:hover {
+.grouping-option:hover span,
+.grouping-option input:checked + span {
   color: var(--reader-ink);
 }
 
-.archive-views button[aria-pressed="true"] {
+.grouping-option input:checked + span {
   background: var(--reader-surface);
-  color: var(--reader-ink);
   font-weight: 600;
+}
+
+.grouping-option input:focus-visible + span {
+  outline: 2px solid var(--reader-accent);
+  outline-offset: 2px;
 }
 
 .archive-search:focus-within {
